@@ -89,6 +89,7 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
                   borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                 ),
               ),
+              dropdownColor: Theme.of(context).colorScheme.surface,
               items: TaskCategory.values.map((category) {
                 return DropdownMenuItem(
                   value: category,
@@ -128,13 +129,28 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
                     children: [
                       Text(
                         '시작 시간',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      TextButton(
-                        onPressed: _selectStartTime,
-                        child: Text(
-                          _formatTime(_startTime),
-                          style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Theme.of(context).colorScheme.outline),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: GestureDetector(
+                          onTap: _selectStartTime,
+                          child: Text(
+                            _formatTime(_startTime),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -146,13 +162,28 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
                     children: [
                       Text(
                         '종료 시간',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      TextButton(
-                        onPressed: _selectEndTime,
-                        child: Text(
-                          _formatTime(_endTime),
-                          style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Theme.of(context).colorScheme.outline),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: GestureDetector(
+                          onTap: _selectEndTime,
+                          child: Text(
+                            _formatTime(_endTime),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -172,10 +203,7 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
           ),
         ),
         ElevatedButton(
-          onPressed: () {
-            _createTask();
-            Navigator.of(context).pop();
-          },
+          onPressed: _createTask,
           style: ElevatedButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.primary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -194,7 +222,14 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
     
     if (picked != null) {
       setState(() {
-        _startTime = DateTime(2024, 1, 1, picked.hour, picked.minute);
+        // 날짜는 initialTime의 날짜로 유지, 시간만 변경
+        _startTime = DateTime(
+          widget.initialTime.year,
+          widget.initialTime.month,
+          widget.initialTime.day,
+          picked.hour,
+          picked.minute,
+        );
         if (_endTime.isBefore(_startTime) || _endTime.isAtSameMomentAs(_startTime)) {
           _endTime = _startTime.add(const Duration(minutes: 30));
         }
@@ -210,7 +245,14 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
     
     if (picked != null) {
       setState(() {
-        _endTime = DateTime(2024, 1, 1, picked.hour, picked.minute);
+        // 날짜는 initialTime의 날짜로 유지, 시간만 변경
+        _endTime = DateTime(
+          widget.initialTime.year,
+          widget.initialTime.month,
+          widget.initialTime.day,
+          picked.hour,
+          picked.minute,
+        );
       });
     }
   }
@@ -254,14 +296,21 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
     );
 
     print('Creating task: ${task.title} at ${task.startTime}');
+    
+    // 작업 생성 후 다이얼로그를 닫지 않고 콜백 호출
     widget.onTaskCreated(task);
+    
     // 성공 메시지 표시
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('작업이 추가되었습니다: ${task.title}'),
         backgroundColor: Theme.of(context).colorScheme.primary,
+        duration: const Duration(seconds: 2),
       ),
     );
+    
+    // 다이얼로그 닫기
+    Navigator.of(context).pop();
   }
 
   @override

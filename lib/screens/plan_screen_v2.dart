@@ -20,6 +20,15 @@ class PlanScreenV2 extends StatefulWidget {
 
 class _PlanScreenV2State extends State<PlanScreenV2> {
   @override
+  void initState() {
+    super.initState();
+    // 화면 로드 시 선택된 날짜의 작업들 로드
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TaskProvider>().loadTasksForDate(widget.selectedDate);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -98,7 +107,13 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
       itemBuilder: (context, index) {
         final hour = index ~/ 2;
         final minute = (index % 2) * 30;
-        final timeSlot = DateTime(2024, 1, 1, hour, minute);
+        final timeSlot = DateTime(
+          widget.selectedDate.year,
+          widget.selectedDate.month,
+          widget.selectedDate.day,
+          hour,
+          minute,
+        );
         
         final slotTasks = tasks.where((task) {
           final taskStart = task.startTime;
@@ -144,20 +159,26 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
     }
   }
 
-  void _showTaskCreationDialog(BuildContext context, DateTime time) {
+  void _showTaskCreationDialog(BuildContext context, DateTime time) async {
     print('Task creation dialog called for time: $time');
-    showDialog(
+    
+    await showDialog(
       context: context,
       builder: (context) => TaskCreationDialogV2(
         initialTime: time,
-        onTaskCreated: (task) {
+        onTaskCreated: (task) async {
           print('Task created: ${task.title}');
-          context.read<TaskProvider>().addTask(task);
-          // 다이얼로그 닫기
-          Navigator.of(context).pop();
+          
+          // TaskProvider를 통해 작업 추가
+          await context.read<TaskProvider>().addTask(task);
+          
+          print('Task added successfully');
         },
       ),
     );
+    
+    // 다이얼로그가 닫힌 후 화면 새로고침
+    setState(() {});
   }
 
   void _showTaskDetails(BuildContext context, Task task) {
@@ -200,6 +221,26 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
               '닫기',
               style: TextStyle(color: Theme.of(context).colorScheme.primary),
             ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // 작업 수정 기능 (향후 구현)
+              Navigator.of(context).pop();
+            },
+            child: const Text('수정'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // 작업 삭제
+              context.read<TaskProvider>().deleteTask(task.id);
+              Navigator.of(context).pop();
+              setState(() {});
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            child: const Text('삭제'),
           ),
         ],
       ),
