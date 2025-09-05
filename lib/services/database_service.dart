@@ -19,8 +19,9 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'plan_do.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -38,7 +39,9 @@ class DatabaseService {
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         isFromExternal INTEGER NOT NULL DEFAULT 0,
-        externalId TEXT
+        externalId TEXT,
+        score INTEGER,
+        doRecord TEXT
       )
     ''');
 
@@ -50,15 +53,27 @@ class DatabaseService {
     ''');
   }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // score와 doRecord 컬럼 추가
+      await db.execute('ALTER TABLE tasks ADD COLUMN score INTEGER');
+      await db.execute('ALTER TABLE tasks ADD COLUMN doRecord TEXT');
+    }
+  }
+
   // Task CRUD operations
   Future<int> insertTask(Task task) async {
     final db = await database;
-    return await db.insert('tasks', task.toJson());
+    print('DatabaseService: Inserting task ${task.title}');
+    final result = await db.insert('tasks', task.toJson());
+    print('DatabaseService: Task inserted with ID: $result');
+    return result;
   }
 
   Future<List<Task>> getAllTasks() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('tasks');
+    print('DatabaseService: Retrieved ${maps.length} tasks from database');
     return List.generate(maps.length, (i) => Task.fromJson(maps[i]));
   }
 

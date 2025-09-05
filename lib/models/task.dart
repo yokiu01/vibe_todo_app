@@ -11,6 +11,8 @@ class Task {
   final DateTime updatedAt;
   final bool isFromExternal; // 노션/구글캘린더에서 가져온 일정인지
   final String? externalId; // 외부 서비스의 ID
+  final int? score; // 별점 (1-5)
+  final String? doRecord; // 한일 기록
 
   Task({
     required this.id,
@@ -25,6 +27,8 @@ class Task {
     required this.updatedAt,
     this.isFromExternal = false,
     this.externalId,
+    this.score,
+    this.doRecord,
   });
 
   Task copyWith({
@@ -40,6 +44,8 @@ class Task {
     DateTime? updatedAt,
     bool? isFromExternal,
     String? externalId,
+    int? score,
+    String? doRecord,
   }) {
     return Task(
       id: id ?? this.id,
@@ -54,6 +60,8 @@ class Task {
       updatedAt: updatedAt ?? this.updatedAt,
       isFromExternal: isFromExternal ?? this.isFromExternal,
       externalId: externalId ?? this.externalId,
+      score: score ?? this.score,
+      doRecord: doRecord ?? this.doRecord,
     );
   }
 
@@ -71,6 +79,8 @@ class Task {
       'updatedAt': updatedAt.toIso8601String(),
       'isFromExternal': isFromExternal,
       'externalId': externalId,
+      'score': score,
+      'doRecord': doRecord,
     };
   }
 
@@ -94,6 +104,8 @@ class Task {
       updatedAt: DateTime.parse(json['updatedAt']),
       isFromExternal: json['isFromExternal'] ?? false,
       externalId: json['externalId'],
+      score: json['score'],
+      doRecord: json['doRecord'],
     );
   }
 }

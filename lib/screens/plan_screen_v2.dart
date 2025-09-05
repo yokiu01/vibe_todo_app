@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/task_provider.dart';
 import '../models/task.dart';
-import '../widgets/modular_components/time_slot_widget_v2.dart';
 import '../widgets/modular_components/task_creation_dialog_v2.dart';
 import 'do_see_screen_v2.dart';
 import 'settings_screen.dart';
@@ -20,8 +19,9 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
     super.initState();
     // 화면 로드 시 선택된 날짜의 작업들 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final selectedDate = context.read<TaskProvider>().selectedDate;
-      context.read<TaskProvider>().loadTasksForDate(selectedDate);
+      final taskProvider = context.read<TaskProvider>();
+      final selectedDate = taskProvider.selectedDate;
+      taskProvider.loadTasksForDate(selectedDate);
     });
   }
 
@@ -77,7 +77,7 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
       builder: (context, taskProvider, child) {
         final selectedDate = taskProvider.selectedDate;
         
-        // 시간별로 그룹화된 작업들
+        // 시간별로 그룹화된 작업들 (시작 시간 기준)
         final Map<String, List<Task>> tasksByHour = {};
         for (int hour = 0; hour < 24; hour++) {
           tasksByHour['$hour'] = tasks.where((task) {
@@ -110,19 +110,19 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
                     SizedBox(
                       width: 60,
                       child: Text(
-                        '시간',
+                        'Time',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),
                     Expanded(
                       child: Text(
-                        '계획',
+                        'Plan',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),
@@ -132,12 +132,13 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
               
               // 시간표
               Expanded(
-                child: ListView.builder(
-                  itemCount: 24,
-                  itemBuilder: (context, hour) {
-                    final hourTasks = tasksByHour['$hour'] ?? [];
-                    return _buildTimeRow(hour, hourTasks, selectedDate);
-                  },
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: List.generate(24, (hour) {
+                      final hourTasks = tasksByHour['$hour'] ?? [];
+                      return _buildTimeRow(hour, hourTasks, selectedDate);
+                    }),
+                  ),
                 ),
               ),
             ],
@@ -148,7 +149,23 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
   }
 
   Widget _buildTimeRow(int hour, List<Task> tasks, DateTime selectedDate) {
+    // 해당 시간에 시작하는 작업들만 필터링
+    final startingTasks = tasks.where((task) => task.startTime.hour == hour).toList();
+    
+    // 이 시간에 시작하는 작업들의 최대 높이 계산
+    double maxHeight = 60; // 기본 높이
+    for (final task in startingTasks) {
+      final duration = task.endTime.difference(task.startTime);
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes % 60;
+      final taskHeight = (hours * 60 + (minutes / 60) * 60).clamp(60.0, double.infinity);
+      if (taskHeight > maxHeight) {
+        maxHeight = taskHeight;
+      }
+    }
+    
     return Container(
+      height: maxHeight,
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -160,15 +177,18 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 시간 표시
+          // 시간 표시 (고정 크기)
           Container(
             width: 60,
+            height: maxHeight,
             padding: const EdgeInsets.all(12),
-            child: Text(
-              '${hour.toString().padLeft(2, '0')}:00',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                fontWeight: FontWeight.w500,
+            child: Center(
+              child: Text(
+                '${hour.toString().padLeft(2, '0')}:00',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -176,9 +196,13 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
           // 작업들
           Expanded(
             child: Container(
+              height: maxHeight,
               padding: const EdgeInsets.all(12),
-              child: tasks.isEmpty
-                  ? GestureDetector(
+              child: Stack(
+                children: [
+                  // + 버튼 (항상 표시)
+                  Positioned.fill(
+                    child: GestureDetector(
                       onTap: () {
                         final time = DateTime(
                           selectedDate.year,
@@ -190,7 +214,6 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
                         _showTaskCreationDialog(context, time);
                       },
                       child: Container(
-                        height: 40,
                         decoration: BoxDecoration(
                           border: Border.all(
                             color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
@@ -208,59 +231,103 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
                           ),
                         ),
                       ),
-                    )
-                  : Column(
-                      children: tasks.map((task) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          child: GestureDetector(
-                            onTap: () => _showTaskDetails(context, task),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: _getTaskColor(task.category).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: _getTaskColor(task.category).withOpacity(0.3),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: _getTaskColor(task.category),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      task.title,
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurface,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    '${_formatTime(task.startTime)}-${_formatTime(task.endTime)}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
                     ),
+                  ),
+                  
+                  // 작업 블록들 (불투명하게)
+                  if (startingTasks.isNotEmpty)
+                    ...startingTasks.map((task) => _buildTaskBlock(task, hour, selectedDate)),
+                ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+
+  Widget _buildTaskBlock(Task task, int hour, DateTime selectedDate) {
+    final duration = task.endTime.difference(task.startTime);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    
+    // 작업의 높이 계산 (시간당 60px, 최소 60px)
+    final height = (hours * 60 + (minutes / 60) * 60).clamp(60.0, double.infinity);
+    
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      height: height,
+      child: GestureDetector(
+        onTap: () => _showTaskDetails(context, task),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: _getTaskColor(task.category).withOpacity(0.9), // 불투명하게
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _getTaskColor(task.category).withOpacity(0.5),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: _getTaskColor(task.category),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              
+              if (task.description != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  task.description!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    fontSize: 10,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              
+              const SizedBox(height: 2),
+              Text(
+                '${_formatTime(task.startTime)} - ${_formatTime(task.endTime)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  fontWeight: FontWeight.w500,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

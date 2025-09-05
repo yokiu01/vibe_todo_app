@@ -31,7 +31,9 @@ class TaskProvider with ChangeNotifier {
 
   Future<void> loadTasks() async {
     try {
+      print('TaskProvider: Loading all tasks from database');
       _tasks = await _databaseService.getAllTasks();
+      print('TaskProvider: Loaded ${_tasks.length} tasks');
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading tasks: $e');
@@ -40,11 +42,11 @@ class TaskProvider with ChangeNotifier {
 
   Future<void> loadTasksForDate(DateTime date) async {
     try {
+      print('TaskProvider: Loading tasks for date: $date');
       _selectedDate = date;
-      // 모든 작업을 로드하고 필터링은 getter에서 처리
-      if (_tasks.isEmpty) {
-        _tasks = await _databaseService.getAllTasks();
-      }
+      // 항상 데이터베이스에서 최신 데이터를 로드
+      _tasks = await _databaseService.getAllTasks();
+      print('TaskProvider: Loaded ${_tasks.length} tasks for date $date');
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading tasks for date: $e');
@@ -118,6 +120,42 @@ class TaskProvider with ChangeNotifier {
   void setSelectedDate(DateTime date) {
     _selectedDate = date;
     notifyListeners();
+  }
+
+  Future<void> updateTaskScore(String taskId, int score) async {
+    try {
+      final taskIndex = _tasks.indexWhere((task) => task.id == taskId);
+      if (taskIndex != -1) {
+        final updatedTask = _tasks[taskIndex].copyWith(
+          score: score,
+          updatedAt: DateTime.now(),
+        );
+        await _databaseService.updateTask(updatedTask);
+        _tasks[taskIndex] = updatedTask;
+        _updateLockScreenData();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error updating task score: $e');
+    }
+  }
+
+  Future<void> updateTaskRecord(String taskId, String record) async {
+    try {
+      final taskIndex = _tasks.indexWhere((task) => task.id == taskId);
+      if (taskIndex != -1) {
+        final updatedTask = _tasks[taskIndex].copyWith(
+          doRecord: record,
+          updatedAt: DateTime.now(),
+        );
+        await _databaseService.updateTask(updatedTask);
+        _tasks[taskIndex] = updatedTask;
+        _updateLockScreenData();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error updating task record: $e');
+    }
   }
 
   // 잠금화면 데이터 업데이트

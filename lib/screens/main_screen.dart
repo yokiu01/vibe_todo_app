@@ -25,6 +25,14 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _loadDailyQuote();
     _loadTaskCounts();
+    _loadTasks();
+  }
+
+  void _loadTasks() {
+    // 앱 시작 시 모든 작업 데이터 로드
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TaskProvider>().loadTasks();
+    });
   }
 
   void _loadDailyQuote() {

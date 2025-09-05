@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class ScoreWidgetV2 extends StatefulWidget {
   final String taskId;
   final Function(int) onScoreChanged;
+  final int? initialScore;
 
   const ScoreWidgetV2({
     super.key,
     required this.taskId,
     required this.onScoreChanged,
+    this.initialScore,
   });
 
   @override
@@ -15,7 +17,13 @@ class ScoreWidgetV2 extends StatefulWidget {
 }
 
 class _ScoreWidgetV2State extends State<ScoreWidgetV2> {
-  int _currentScore = 0;
+  late int _currentScore;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentScore = widget.initialScore ?? 0;
+  }
 
   @override
   Widget build(BuildContext context) {
