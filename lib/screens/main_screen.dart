@@ -6,6 +6,7 @@ import '../widgets/modular_components/calendar_widget.dart';
 import '../services/quote_service.dart';
 import 'plan_screen_v2.dart';
 import 'do_see_screen_v2.dart';
+import 'settings_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -304,7 +305,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               onTap: () {
                 Navigator.pop(context);
-                // 설정 화면으로 이동
+                _navigateToSettings();
               },
             ),
           ],
@@ -314,10 +315,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _navigateToPlan(DateTime date) {
+    // TaskProvider의 selectedDate를 먼저 설정
+    context.read<TaskProvider>().loadTasksForDate(date);
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PlanScreenV2(selectedDate: date),
+        builder: (context) => const PlanScreenV2(),
       ),
     );
   }
@@ -327,6 +330,15 @@ class _MainScreenState extends State<MainScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => DoSeeScreenV2(selectedDate: date),
+      ),
+    );
+  }
+
+  void _navigateToSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SettingsScreen(),
       ),
     );
   }

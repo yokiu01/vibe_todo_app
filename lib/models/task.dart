@@ -121,3 +121,4 @@ enum TaskStatus {
   const TaskStatus(this.displayName);
   final String displayName;
 }
+

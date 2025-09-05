@@ -122,3 +122,4 @@ class CurrentTaskWidget extends StatelessWidget {
     return elapsedDuration / totalDuration;
   }
 }
+

@@ -40,7 +40,10 @@ class TaskProvider with ChangeNotifier {
   Future<void> loadTasksForDate(DateTime date) async {
     try {
       _selectedDate = date;
-      _tasks = await _databaseService.getTasksByDate(date);
+      // 모든 작업을 로드하고 필터링은 getter에서 처리
+      if (_tasks.isEmpty) {
+        _tasks = await _databaseService.getAllTasks();
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading tasks for date: $e');

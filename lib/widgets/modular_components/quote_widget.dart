@@ -66,3 +66,4 @@ class QuoteWidget extends StatelessWidget {
     );
   }
 }
+

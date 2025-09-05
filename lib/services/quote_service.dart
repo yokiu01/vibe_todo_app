@@ -76,3 +76,4 @@ class QuoteService {
     return _quotes[random.nextInt(_quotes.length)];
   }
 }
+

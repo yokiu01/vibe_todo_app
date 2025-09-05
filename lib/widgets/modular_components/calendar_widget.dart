@@ -143,6 +143,11 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         final isSelected = _isSameDay(date, widget.selectedDate);
         final isToday = _isSameDay(date, DateTime.now());
         final taskCount = widget.taskCounts[date] ?? 0;
+        
+        // 디버그 로그
+        if (isToday) {
+          print('Today marker found for date: $date, selectedDate: ${widget.selectedDate}');
+        }
 
         return GestureDetector(
           onTap: () => widget.onDateSelected(date),
@@ -164,7 +169,9 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: isSelected 
                         ? Theme.of(context).colorScheme.onPrimary
-                        : Theme.of(context).colorScheme.onSurface,
+                        : isToday
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurface,
                     fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),

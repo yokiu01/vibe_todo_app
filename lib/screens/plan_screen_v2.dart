@@ -7,12 +7,7 @@ import '../widgets/modular_components/task_creation_dialog_v2.dart';
 import '../widgets/modular_components/external_calendar_widget.dart';
 
 class PlanScreenV2 extends StatefulWidget {
-  final DateTime selectedDate;
-
-  const PlanScreenV2({
-    super.key,
-    required this.selectedDate,
-  });
+  const PlanScreenV2({super.key});
 
   @override
   State<PlanScreenV2> createState() => _PlanScreenV2State();
@@ -24,7 +19,8 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
     super.initState();
     // 화면 로드 시 선택된 날짜의 작업들 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TaskProvider>().loadTasksForDate(widget.selectedDate);
+      final selectedDate = context.read<TaskProvider>().selectedDate;
+      context.read<TaskProvider>().loadTasksForDate(selectedDate);
     });
   }
 
@@ -32,12 +28,16 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          '계획 세우기 - ${_formatDate(widget.selectedDate)}',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontWeight: FontWeight.bold,
-          ),
+        title: Consumer<TaskProvider>(
+          builder: (context, taskProvider, child) {
+            return Text(
+              _formatDate(taskProvider.selectedDate),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
+            );
+          },
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -102,18 +102,21 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
 
   Widget _buildTimeTable(List<Task> tasks) {
     print('Building time table with ${tasks.length} tasks');
-    return ListView.builder(
-      itemCount: 48, // 30분 단위로 24시간 = 48개
-      itemBuilder: (context, index) {
-        final hour = index ~/ 2;
-        final minute = (index % 2) * 30;
-        final timeSlot = DateTime(
-          widget.selectedDate.year,
-          widget.selectedDate.month,
-          widget.selectedDate.day,
-          hour,
-          minute,
-        );
+    return Consumer<TaskProvider>(
+      builder: (context, taskProvider, child) {
+        final selectedDate = taskProvider.selectedDate;
+        return ListView.builder(
+          itemCount: 48, // 30분 단위로 24시간 = 48개
+          itemBuilder: (context, index) {
+            final hour = index ~/ 2;
+            final minute = (index % 2) * 30;
+            final timeSlot = DateTime(
+              selectedDate.year,
+              selectedDate.month,
+              selectedDate.day,
+              hour,
+              minute,
+            );
         
         final slotTasks = tasks.where((task) {
           final taskStart = task.startTime;
@@ -128,11 +131,13 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
           print('Time slot ${timeSlot.hour}:${timeSlot.minute.toString().padLeft(2, '0')} has ${slotTasks.length} tasks');
         }
         
-        return TimeSlotWidgetV2(
-          timeSlot: timeSlot,
-          tasks: slotTasks,
-          onTaskTap: (task) => _showTaskDetails(context, task),
-          onEmptySlotTap: (time) => _showTaskCreationDialog(context, time),
+            return TimeSlotWidgetV2(
+              timeSlot: timeSlot,
+              tasks: slotTasks,
+              onTaskTap: (task) => _showTaskDetails(context, task),
+              onEmptySlotTap: (time) => _showTaskCreationDialog(context, time),
+            );
+          },
         );
       },
     );
@@ -147,15 +152,16 @@ class _PlanScreenV2State extends State<PlanScreenV2> {
   }
 
   void _selectDate() async {
+    final taskProvider = context.read<TaskProvider>();
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: widget.selectedDate,
+      initialDate: taskProvider.selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
     
     if (picked != null) {
-      context.read<TaskProvider>().loadTasksForDate(picked);
+      taskProvider.loadTasksForDate(picked);
     }
   }
 
