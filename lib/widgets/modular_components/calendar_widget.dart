@@ -160,6 +160,12 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                       ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
                       : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
+              border: isSelected 
+                  ? Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    )
+                  : null,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -168,11 +174,16 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                   day.toString(),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: isSelected 
-                        ? Theme.of(context).colorScheme.onPrimary
+                        ? Colors.white  // 선택된 날짜는 흰색으로 고정
                         : isToday
-                            ? Theme.of(context).colorScheme.primary
+                            ? Theme.of(context).colorScheme.onSurface 
                             : Theme.of(context).colorScheme.onSurface,
-                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                    fontWeight: isSelected 
+                        ? FontWeight.bold  // 선택된 날짜는 굵게
+                        : isToday 
+                            ? FontWeight.bold 
+                            : FontWeight.normal,
+                    fontSize: isSelected ? 16 : 14,  // 선택된 날짜는 크게
                   ),
                 ),
                 if (taskCount > 0) ...[
@@ -182,7 +193,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                     height: 4,
                     decoration: BoxDecoration(
                       color: isSelected 
-                          ? Theme.of(context).colorScheme.onPrimary
+                          ? Colors.white  // 선택된 날짜의 점은 흰색
                           : Theme.of(context).colorScheme.primary,
                       shape: BoxShape.circle,
                     ),

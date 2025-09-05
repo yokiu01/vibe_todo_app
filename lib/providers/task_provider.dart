@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/task.dart';
 import '../services/database_service.dart';
 import '../services/widget_service.dart';
+import '../services/lock_screen_service.dart';
 
 class TaskProvider with ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService();
@@ -60,6 +61,8 @@ class TaskProvider with ChangeNotifier {
       notifyListeners();
       // 위젯 업데이트
       WidgetService.updateWidget(currentTasks);
+      // 잠금화면 데이터 업데이트
+      _updateLockScreenData();
     } catch (e) {
       debugPrint('Error adding task: $e');
       // 에러가 발생해도 UI에 표시
@@ -77,6 +80,8 @@ class TaskProvider with ChangeNotifier {
         notifyListeners();
         // 위젯 업데이트
         WidgetService.updateWidget(currentTasks);
+        // 잠금화면 데이터 업데이트
+        _updateLockScreenData();
       }
     } catch (e) {
       debugPrint('Error updating task: $e');
@@ -88,6 +93,8 @@ class TaskProvider with ChangeNotifier {
       await _databaseService.deleteTask(taskId);
       _tasks.removeWhere((task) => task.id == taskId);
       notifyListeners();
+      // 잠금화면 데이터 업데이트
+      _updateLockScreenData();
     } catch (e) {
       debugPrint('Error deleting task: $e');
     }
@@ -111,5 +118,17 @@ class TaskProvider with ChangeNotifier {
   void setSelectedDate(DateTime date) {
     _selectedDate = date;
     notifyListeners();
+  }
+
+  // 잠금화면 데이터 업데이트
+  Future<void> _updateLockScreenData() async {
+    try {
+      await LockScreenService.updateLockScreenData(
+        todayTasks: tasksForSelectedDate,
+        currentTasks: currentTasks,
+      );
+    } catch (e) {
+      debugPrint('Error updating lock screen data: $e');
+    }
   }
 }

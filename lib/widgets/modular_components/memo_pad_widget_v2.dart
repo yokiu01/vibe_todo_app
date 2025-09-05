@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_signature_pad/flutter_signature_pad.dart';
 
 class MemoPadWidgetV2 extends StatefulWidget {
   const MemoPadWidgetV2({super.key});
@@ -9,9 +8,7 @@ class MemoPadWidgetV2 extends StatefulWidget {
 }
 
 class _MemoPadWidgetV2State extends State<MemoPadWidgetV2> {
-  final GlobalKey<SignatureState> _signatureKey = GlobalKey<SignatureState>();
   final TextEditingController _textController = TextEditingController();
-  bool _isDrawing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -50,23 +47,12 @@ class _MemoPadWidgetV2State extends State<MemoPadWidgetV2> {
                   ),
                 ),
                 const Spacer(),
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _toggleMode,
-                      icon: Icon(
-                        _isDrawing ? Icons.text_fields : Icons.brush,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _clearContent,
-                      icon: Icon(
-                        Icons.clear,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
+                IconButton(
+                  onPressed: _clearContent,
+                  icon: Icon(
+                    Icons.clear,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ],
             ),
@@ -74,20 +60,9 @@ class _MemoPadWidgetV2State extends State<MemoPadWidgetV2> {
           
           // 메모 영역
           Expanded(
-            child: _isDrawing ? _buildDrawingArea() : _buildTextArea(),
+            child: _buildTextArea(),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDrawingArea() {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      child: Signature(
-        key: _signatureKey,
-        color: Theme.of(context).colorScheme.primary,
-        strokeWidth: 2.0,
       ),
     );
   }
@@ -98,7 +73,7 @@ class _MemoPadWidgetV2State extends State<MemoPadWidgetV2> {
       child: TextField(
         controller: _textController,
         decoration: InputDecoration(
-          hintText: '메모...',
+          hintText: '하루를 메모해보세요...',
           border: InputBorder.none,
           hintStyle: TextStyle(
             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
@@ -114,18 +89,8 @@ class _MemoPadWidgetV2State extends State<MemoPadWidgetV2> {
     );
   }
 
-  void _toggleMode() {
-    setState(() {
-      _isDrawing = !_isDrawing;
-    });
-  }
-
   void _clearContent() {
-    if (_isDrawing) {
-      _signatureKey.currentState?.clear();
-    } else {
-      _textController.clear();
-    }
+    _textController.clear();
   }
 
   @override

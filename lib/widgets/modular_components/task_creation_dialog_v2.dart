@@ -3,11 +3,13 @@ import '../../models/task.dart';
 
 class TaskCreationDialogV2 extends StatefulWidget {
   final DateTime initialTime;
+  final Task? initialTask; // 기존 작업 (수정 모드일 때)
   final Function(Task) onTaskCreated;
 
   const TaskCreationDialogV2({
     super.key,
     required this.initialTime,
+    this.initialTask,
     required this.onTaskCreated,
   });
 
@@ -25,8 +27,20 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
   @override
   void initState() {
     super.initState();
-    _startTime = widget.initialTime;
-    _endTime = widget.initialTime.add(const Duration(minutes: 30));
+    
+    if (widget.initialTask != null) {
+      // 수정 모드: 기존 작업 데이터로 초기화
+      final task = widget.initialTask!;
+      _titleController.text = task.title;
+      _descriptionController.text = task.description ?? '';
+      _selectedCategory = task.category;
+      _startTime = task.startTime;
+      _endTime = task.endTime;
+    } else {
+      // 생성 모드: 기본값으로 초기화
+      _startTime = widget.initialTime;
+      _endTime = widget.initialTime.add(const Duration(minutes: 30));
+    }
   }
 
   @override
@@ -34,7 +48,7 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
     return AlertDialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
       title: Text(
-        '새 작업 추가',
+        widget.initialTask != null ? '작업 수정' : '새 작업 추가',
         style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
       ),
       content: SingleChildScrollView(
@@ -208,7 +222,7 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
             backgroundColor: Theme.of(context).colorScheme.primary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
           ),
-          child: const Text('추가'),
+          child: Text(widget.initialTask != null ? '수정' : '추가'),
         ),
       ],
     );
@@ -282,28 +296,39 @@ class _TaskCreationDialogV2State extends State<TaskCreationDialogV2> {
       return;
     }
 
-    final task = Task(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty 
-          ? null 
-          : _descriptionController.text.trim(),
-      startTime: _startTime,
-      endTime: _endTime,
-      category: _selectedCategory,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
+    final task = widget.initialTask != null 
+        ? widget.initialTask!.copyWith(
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim().isEmpty 
+                ? null 
+                : _descriptionController.text.trim(),
+            startTime: _startTime,
+            endTime: _endTime,
+            category: _selectedCategory,
+            updatedAt: DateTime.now(),
+          )
+        : Task(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim().isEmpty 
+                ? null 
+                : _descriptionController.text.trim(),
+            startTime: _startTime,
+            endTime: _endTime,
+            category: _selectedCategory,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
 
-    print('Creating task: ${task.title} at ${task.startTime}');
+    print('${widget.initialTask != null ? 'Updating' : 'Creating'} task: ${task.title} at ${task.startTime}');
     
-    // 작업 생성 후 다이얼로그를 닫지 않고 콜백 호출
+    // 작업 생성/수정 후 콜백 호출
     widget.onTaskCreated(task);
     
     // 성공 메시지 표시
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('작업이 추가되었습니다: ${task.title}'),
+        content: Text('작업이 ${widget.initialTask != null ? '수정' : '추가'}되었습니다: ${task.title}'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         duration: const Duration(seconds: 2),
       ),

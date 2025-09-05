@@ -124,13 +124,6 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _navigateToPlan(DateTime.now()),
-        icon: const Icon(Icons.add),
-        label: const Text('계획하기'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      ),
     );
   }
 

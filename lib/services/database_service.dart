@@ -119,5 +119,64 @@ class DatabaseService {
     }
     return null;
   }
+
+  // 데이터베이스 연결 테스트
+  Future<bool> testConnection() async {
+    try {
+      final db = await database;
+      await db.rawQuery('SELECT 1');
+      return true;
+    } catch (e) {
+      print('Database connection test failed: $e');
+      return false;
+    }
+  }
+
+  // 데이터베이스 초기화 (개발/테스트용)
+  Future<void> resetDatabase() async {
+    try {
+      final db = await database;
+      await db.delete('tasks');
+      await db.delete('settings');
+      print('Database reset successfully');
+    } catch (e) {
+      print('Error resetting database: $e');
+    }
+  }
+
+  // 데이터베이스 상태 확인
+  Future<Map<String, dynamic>> getDatabaseStatus() async {
+    try {
+      final db = await database;
+      
+      // 테이블 존재 확인
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tasks', 'settings')"
+      );
+      
+      // 작업 수 확인
+      final taskCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM tasks')) ?? 0;
+      
+      // 설정 수 확인
+      final settingCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM settings')) ?? 0;
+      
+      return {
+        'isConnected': true,
+        'tablesExist': tables.length == 2,
+        'taskCount': taskCount,
+        'settingCount': settingCount,
+        'tables': tables.map((table) => table['name']).toList(),
+      };
+    } catch (e) {
+      return {
+        'isConnected': false,
+        'error': e.toString(),
+        'tablesExist': false,
+        'taskCount': 0,
+        'settingCount': 0,
+        'tables': <String>[],
+      };
+    }
+  }
 }
 
