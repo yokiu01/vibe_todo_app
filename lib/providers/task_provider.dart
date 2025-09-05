@@ -1,0 +1,112 @@
+import 'package:flutter/foundation.dart';
+import '../models/task.dart';
+import '../services/database_service.dart';
+import '../services/widget_service.dart';
+
+class TaskProvider with ChangeNotifier {
+  final DatabaseService _databaseService = DatabaseService();
+  List<Task> _tasks = [];
+  DateTime _selectedDate = DateTime.now();
+
+  List<Task> get tasks => _tasks;
+  DateTime get selectedDate => _selectedDate;
+
+  List<Task> get tasksForSelectedDate {
+    return _tasks.where((task) {
+      final taskDate = DateTime(task.startTime.year, task.startTime.month, task.startTime.day);
+      final selectedDateOnly = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      return taskDate.isAtSameMomentAs(selectedDateOnly);
+    }).toList();
+  }
+
+  List<Task> get currentTasks {
+    final now = DateTime.now();
+    return _tasks.where((task) {
+      return task.startTime.isBefore(now) && 
+             task.endTime.isAfter(now) && 
+             task.status == TaskStatus.planned;
+    }).toList();
+  }
+
+  Future<void> loadTasks() async {
+    try {
+      _tasks = await _databaseService.getAllTasks();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading tasks: $e');
+    }
+  }
+
+  Future<void> loadTasksForDate(DateTime date) async {
+    try {
+      _selectedDate = date;
+      _tasks = await _databaseService.getTasksByDate(date);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading tasks for date: $e');
+    }
+  }
+
+  Future<void> addTask(Task task) async {
+    try {
+      print('Adding task: ${task.title}');
+      await _databaseService.insertTask(task);
+      _tasks.add(task);
+      print('Task added to list, total tasks: ${_tasks.length}');
+      print('Tasks for selected date: ${tasksForSelectedDate.length}');
+      notifyListeners();
+      // 위젯 업데이트
+      WidgetService.updateWidget(currentTasks);
+    } catch (e) {
+      debugPrint('Error adding task: $e');
+      // 에러가 발생해도 UI에 표시
+      _tasks.add(task);
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateTask(Task task) async {
+    try {
+      await _databaseService.updateTask(task);
+      final index = _tasks.indexWhere((t) => t.id == task.id);
+      if (index != -1) {
+        _tasks[index] = task;
+        notifyListeners();
+        // 위젯 업데이트
+        WidgetService.updateWidget(currentTasks);
+      }
+    } catch (e) {
+      debugPrint('Error updating task: $e');
+    }
+  }
+
+  Future<void> deleteTask(String taskId) async {
+    try {
+      await _databaseService.deleteTask(taskId);
+      _tasks.removeWhere((task) => task.id == taskId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting task: $e');
+    }
+  }
+
+  Future<void> updateTaskStatus(String taskId, TaskStatus status) async {
+    try {
+      final task = _tasks.firstWhere((t) => t.id == taskId);
+      final updatedTask = task.copyWith(
+        status: status,
+        updatedAt: DateTime.now(),
+      );
+      await updateTask(updatedTask);
+      // 위젯 업데이트
+      WidgetService.updateWidget(currentTasks);
+    } catch (e) {
+      debugPrint('Error updating task status: $e');
+    }
+  }
+
+  void setSelectedDate(DateTime date) {
+    _selectedDate = date;
+    notifyListeners();
+  }
+}
