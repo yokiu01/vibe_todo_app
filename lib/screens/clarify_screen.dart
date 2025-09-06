@@ -14,6 +14,7 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
   int _currentIndex = 0;
   bool? _isActionable;
   ClarificationType? _clarificationType;
+  List<int> _processedIndices = []; // 처리된 항목들의 인덱스
 
   @override
   void initState() {
@@ -38,6 +39,12 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
       return null;
     }
     return itemProvider.inboxItems[_currentIndex];
+  }
+
+  // 아직 처리되지 않은 항목이 있는지 확인
+  bool get _hasUnprocessedItems {
+    final itemProvider = context.read<ItemProvider>();
+    return _processedIndices.length < itemProvider.inboxItems.length;
   }
 
   void _handleActionableChoice(bool actionable) {
@@ -98,6 +105,12 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
       }
 
       await context.read<ItemProvider>().updateItem(_currentItem!.id, updates);
+      
+      // 현재 항목을 처리된 목록에 추가
+      if (!_processedIndices.contains(_currentIndex)) {
+        _processedIndices.add(_currentIndex);
+      }
+      
       _handleNext();
     } catch (e) {
       if (mounted) {
@@ -113,13 +126,28 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
 
   void _handleNext() {
     final itemProvider = context.read<ItemProvider>();
-    if (_currentIndex < itemProvider.inboxItems.length - 1) {
-      setState(() {
-        _currentIndex++;
-        _isActionable = null;
-        _clarificationType = null;
-      });
+    
+    // 아직 처리되지 않은 항목이 있는지 확인
+    if (_hasUnprocessedItems) {
+      // 처리되지 않은 항목 중에서 랜덤하게 선택
+      List<int> unprocessedIndices = [];
+      for (int i = 0; i < itemProvider.inboxItems.length; i++) {
+        if (!_processedIndices.contains(i)) {
+          unprocessedIndices.add(i);
+        }
+      }
+      
+      if (unprocessedIndices.isNotEmpty) {
+        // 순차적으로 선택 (가장 작은 인덱스부터)
+        unprocessedIndices.sort();
+        setState(() {
+          _currentIndex = unprocessedIndices.first;
+          _isActionable = null;
+          _clarificationType = null;
+        });
+      }
     } else {
+      // 모든 항목이 처리되었을 때만 완료 메시지 표시
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -133,6 +161,7 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
                   _currentIndex = 0;
                   _isActionable = null;
                   _clarificationType = null;
+                  _processedIndices.clear(); // 처리된 목록 초기화
                 });
               },
               child: const Text('확인'),
@@ -144,6 +173,10 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
   }
 
   void _handleSkip() {
+    // 건너뛰기한 항목도 처리된 것으로 표시
+    if (!_processedIndices.contains(_currentIndex)) {
+      _processedIndices.add(_currentIndex);
+    }
     _handleNext();
   }
 
@@ -180,11 +213,11 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
+          const Text(
             '🎉 명료화 완료!',
             style: TextStyle(
               fontSize: 24,
@@ -192,10 +225,10 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
               color: Color(0xFF059669),
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             '모든 항목이 정리되었습니다.',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 16,
               color: Color(0xFF64748B),
             ),
@@ -226,7 +259,7 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
-              '${_currentIndex + 1}/$totalItems',
+              '${_processedIndices.length}/$totalItems',
               style: const TextStyle(
                 fontSize: 16,
                 color: Color(0xFF64748B),
