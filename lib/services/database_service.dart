@@ -1,6 +1,13 @@
+import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import '../models/task.dart';
+import '../models/item.dart';
+import '../models/daily_plan.dart';
+import '../models/review.dart';
+import '../models/hierarchy.dart';
+import '../models/settings.dart';
+import '../models/pds_plan.dart';
+import '../utils/helpers.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -16,182 +23,393 @@ class DatabaseService {
   }
 
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'plan_do.db');
+    String path = join(await getDatabasesPath(), 'productivity_app.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 1,
       onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    // Items table
     await db.execute('''
-      CREATE TABLE tasks (
+      CREATE TABLE items (
         id TEXT PRIMARY KEY,
+        type TEXT CHECK (type IN ('goal', 'project', 'task', 'note', 'area', 'resource')) NOT NULL,
         title TEXT NOT NULL,
-        description TEXT,
-        startTime TEXT NOT NULL,
-        endTime TEXT NOT NULL,
-        category TEXT NOT NULL,
-        status TEXT NOT NULL,
-        colorTag TEXT,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL,
-        isFromExternal INTEGER NOT NULL DEFAULT 0,
-        externalId TEXT,
-        score INTEGER,
-        doRecord TEXT
+        content TEXT,
+        status TEXT CHECK (status IN ('inbox', 'clarified', 'active', 'completed', 'archived', 'someday', 'waiting')) DEFAULT 'inbox',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        due_date DATETIME,
+        reminder_date DATETIME,
+        estimated_duration INTEGER,
+        actual_duration INTEGER,
+        priority INTEGER CHECK (priority BETWEEN 1 AND 5) DEFAULT 3,
+        energy_level TEXT CHECK (energy_level IN ('high', 'medium', 'low')),
+        context TEXT CHECK (context IN ('home', 'office', 'computer', 'errands', 'calls', 'anywhere')),
+        delegated_to TEXT,
+        waiting_for TEXT,
+        completion_date DATETIME
       )
     ''');
 
+    // Hierarchy table
+    await db.execute('''
+      CREATE TABLE hierarchy (
+        id TEXT PRIMARY KEY,
+        parent_id TEXT NOT NULL,
+        child_id TEXT NOT NULL,
+        relationship_type TEXT CHECK (relationship_type IN ('areaGoal', 'goalProject', 'projectTask', 'areaNote', 'resourceNote')) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_id) REFERENCES items(id) ON DELETE CASCADE,
+        FOREIGN KEY (child_id) REFERENCES items(id) ON DELETE CASCADE
+      )
+    ''');
+
+    // Daily plans table
+    await db.execute('''
+      CREATE TABLE daily_plans (
+        id TEXT PRIMARY KEY,
+        date DATE NOT NULL UNIQUE,
+        plan_morning TEXT,
+        plan_afternoon TEXT,
+        plan_evening TEXT,
+        actual_items TEXT,
+        see_notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+
+    // Reviews table
+    await db.execute('''
+      CREATE TABLE reviews (
+        id TEXT PRIMARY KEY,
+        review_date DATE NOT NULL,
+        type TEXT CHECK (type IN ('daily', 'weekly', 'monthly')) NOT NULL,
+        empty_inbox_completed BOOLEAN DEFAULT 0,
+        clarify_completed BOOLEAN DEFAULT 0,
+        mind_sweep_completed BOOLEAN DEFAULT 0,
+        next_actions_reviewed BOOLEAN DEFAULT 0,
+        projects_updated BOOLEAN DEFAULT 0,
+        goals_checked BOOLEAN DEFAULT 0,
+        calendar_planned BOOLEAN DEFAULT 0,
+        someday_reviewed BOOLEAN DEFAULT 0,
+        new_goals_added BOOLEAN DEFAULT 0,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+
+    // Settings table
     await db.execute('''
       CREATE TABLE settings (
         key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
+        value TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     ''');
+
+    // PDS Plans table
+    await db.execute('''
+      CREATE TABLE pds_plans (
+        id TEXT PRIMARY KEY,
+        date DATE NOT NULL UNIQUE,
+        freeform_plans TEXT,
+        actual_activities TEXT,
+        see_notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+
+    // Insert initial data
+    await _insertInitialData(db);
   }
 
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      // score와 doRecord 컬럼 추가
-      await db.execute('ALTER TABLE tasks ADD COLUMN score INTEGER');
-      await db.execute('ALTER TABLE tasks ADD COLUMN doRecord TEXT');
+  Future<void> _insertInitialData(Database db) async {
+    // Default areas
+    final defaultAreas = [
+      {'id': 'area-work', 'type': 'area', 'title': '직장', 'status': 'active'},
+      {'id': 'area-health', 'type': 'area', 'title': '건강', 'status': 'active'},
+      {'id': 'area-learning', 'type': 'area', 'title': '학습', 'status': 'active'},
+      {'id': 'area-personal', 'type': 'area', 'title': '개인', 'status': 'active'},
+    ];
+
+    // Default resources
+    final defaultResources = [
+      {'id': 'resource-ideas', 'type': 'resource', 'title': '아이디어', 'status': 'active'},
+      {'id': 'resource-reading', 'type': 'resource', 'title': '읽을거리', 'status': 'active'},
+      {'id': 'resource-hobbies', 'type': 'resource', 'title': '취미', 'status': 'active'},
+    ];
+
+    final allDefaults = [...defaultAreas, ...defaultResources];
+
+    for (final item in allDefaults) {
+      await db.insert(
+        'items',
+        {
+          ...item,
+          'priority': 3,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+
+    // Default settings
+    final defaultSettings = [
+      {'key': 'theme', 'value': 'light'},
+      {'key': 'language', 'value': 'ko'},
+      {'key': 'notification_enabled', 'value': 'true'},
+      {'key': 'review_reminder', 'value': 'weekly'},
+      {'key': 'energy_tracking', 'value': 'true'},
+    ];
+
+    for (final setting in defaultSettings) {
+      await db.insert(
+        'settings',
+        {
+          ...setting,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
     }
   }
 
-  // Task CRUD operations
-  Future<int> insertTask(Task task) async {
+  // Items CRUD
+  Future<List<Item>> getAllItems() async {
     final db = await database;
-    print('DatabaseService: Inserting task ${task.title}');
-    final result = await db.insert('tasks', task.toJson());
-    print('DatabaseService: Task inserted with ID: $result');
-    return result;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'items',
+      orderBy: 'created_at DESC',
+    );
+    return List.generate(maps.length, (i) => Item.fromMap(maps[i]));
   }
 
-  Future<List<Task>> getAllTasks() async {
+  Future<Item> createItem(Item item) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('tasks');
-    print('DatabaseService: Retrieved ${maps.length} tasks from database');
-    return List.generate(maps.length, (i) => Task.fromJson(maps[i]));
+    await db.insert('items', item.toMap());
+    return item;
   }
 
-  Future<List<Task>> getTasksByDate(DateTime date) async {
+  Future<Item> updateItem(String id, Map<String, dynamic> updates) async {
     final db = await database;
-    final startOfDay = DateTime(date.year, date.month, date.day);
-    final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59);
+    updates['updated_at'] = DateTime.now().toIso8601String();
+    await db.update('items', updates, where: 'id = ?', whereArgs: [id]);
     
     final List<Map<String, dynamic>> maps = await db.query(
-      'tasks',
-      where: 'startTime >= ? AND startTime <= ?',
-      whereArgs: [startOfDay.toIso8601String(), endOfDay.toIso8601String()],
-      orderBy: 'startTime ASC',
-    );
-    
-    return List.generate(maps.length, (i) => Task.fromJson(maps[i]));
-  }
-
-  Future<int> updateTask(Task task) async {
-    final db = await database;
-    return await db.update(
-      'tasks',
-      task.toJson(),
-      where: 'id = ?',
-      whereArgs: [task.id],
-    );
-  }
-
-  Future<int> deleteTask(String id) async {
-    final db = await database;
-    return await db.delete(
-      'tasks',
+      'items',
       where: 'id = ?',
       whereArgs: [id],
     );
+    return Item.fromMap(maps.first);
   }
 
-  // Settings operations
-  Future<void> setSetting(String key, String value) async {
+  Future<void> deleteItem(String id) async {
     final db = await database;
-    await db.insert(
-      'settings',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    await db.delete('items', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Daily Plans CRUD
+  Future<List<DailyPlan>> getAllDailyPlans() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'daily_plans',
+      orderBy: 'date DESC',
     );
+    return List.generate(maps.length, (i) => DailyPlan.fromMap(maps[i]));
   }
 
-  Future<String?> getSetting(String key) async {
+  Future<DailyPlan> createDailyPlan(DailyPlan plan) async {
     final db = await database;
-    final List<Map<String, dynamic>> result = await db.query(
+    await db.insert('daily_plans', plan.toMap());
+    return plan;
+  }
+
+  Future<DailyPlan> updateDailyPlan(String id, Map<String, dynamic> updates) async {
+    final db = await database;
+    updates['updated_at'] = DateTime.now().toIso8601String();
+    await db.update('daily_plans', updates, where: 'id = ?', whereArgs: [id]);
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'daily_plans',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return DailyPlan.fromMap(maps.first);
+  }
+
+  Future<DailyPlan?> getDailyPlanByDate(DateTime date) async {
+    final db = await database;
+    final dateStr = date.toIso8601String().split('T')[0];
+    final List<Map<String, dynamic>> maps = await db.query(
+      'daily_plans',
+      where: 'date = ?',
+      whereArgs: [dateStr],
+    );
+    if (maps.isEmpty) return null;
+    return DailyPlan.fromMap(maps.first);
+  }
+
+  // Reviews CRUD
+  Future<List<Review>> getAllReviews() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'reviews',
+      orderBy: 'review_date DESC',
+    );
+    return List.generate(maps.length, (i) => Review.fromMap(maps[i]));
+  }
+
+  Future<Review> createReview(Review review) async {
+    final db = await database;
+    await db.insert('reviews', review.toMap());
+    return review;
+  }
+
+  Future<Review> updateReview(String id, Map<String, dynamic> updates) async {
+    final db = await database;
+    await db.update('reviews', updates, where: 'id = ?', whereArgs: [id]);
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'reviews',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return Review.fromMap(maps.first);
+  }
+
+  Future<Review?> getReviewByDate(DateTime date, ReviewType type) async {
+    final db = await database;
+    final dateStr = date.toIso8601String().split('T')[0];
+    final List<Map<String, dynamic>> maps = await db.query(
+      'reviews',
+      where: 'review_date = ? AND type = ?',
+      whereArgs: [dateStr, type.name],
+    );
+    if (maps.isEmpty) return null;
+    return Review.fromMap(maps.first);
+  }
+
+  // Settings CRUD
+  Future<List<AppSettings>> getAllSettings() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('settings');
+    return List.generate(maps.length, (i) => AppSettings.fromMap(maps[i]));
+  }
+
+  Future<AppSettings> updateSetting(String key, String value) async {
+    final db = await database;
+    await db.update(
       'settings',
+      {
+        'value': value,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
       where: 'key = ?',
       whereArgs: [key],
     );
     
-    if (result.isNotEmpty) {
-      return result.first['value'] as String;
-    }
-    return null;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'settings',
+      where: 'key = ?',
+      whereArgs: [key],
+    );
+    return AppSettings.fromMap(maps.first);
   }
 
-  // 데이터베이스 연결 테스트
-  Future<bool> testConnection() async {
-    try {
-      final db = await database;
-      await db.rawQuery('SELECT 1');
-      return true;
-    } catch (e) {
-      print('Database connection test failed: $e');
-      return false;
-    }
+  Future<String?> getSettingValue(String key) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'settings',
+      where: 'key = ?',
+      whereArgs: [key],
+    );
+    if (maps.isEmpty) return null;
+    return maps.first['value'];
   }
 
-  // 데이터베이스 초기화 (개발/테스트용)
-  Future<void> resetDatabase() async {
-    try {
-      final db = await database;
-      await db.delete('tasks');
-      await db.delete('settings');
-      print('Database reset successfully');
-    } catch (e) {
-      print('Error resetting database: $e');
-    }
+  // Hierarchy CRUD
+  Future<List<Hierarchy>> getAllHierarchies() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('hierarchy');
+    return List.generate(maps.length, (i) => Hierarchy.fromMap(maps[i]));
   }
 
-  // 데이터베이스 상태 확인
-  Future<Map<String, dynamic>> getDatabaseStatus() async {
-    try {
-      final db = await database;
-      
-      // 테이블 존재 확인
-      final tables = await db.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tasks', 'settings')"
-      );
-      
-      // 작업 수 확인
-      final taskCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM tasks')) ?? 0;
-      
-      // 설정 수 확인
-      final settingCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM settings')) ?? 0;
-      
-      return {
-        'isConnected': true,
-        'tablesExist': tables.length == 2,
-        'taskCount': taskCount,
-        'settingCount': settingCount,
-        'tables': tables.map((table) => table['name']).toList(),
-      };
-    } catch (e) {
-      return {
-        'isConnected': false,
-        'error': e.toString(),
-        'tablesExist': false,
-        'taskCount': 0,
-        'settingCount': 0,
-        'tables': <String>[],
-      };
-    }
+  Future<Hierarchy> createHierarchy(Hierarchy hierarchy) async {
+    final db = await database;
+    await db.insert('hierarchy', hierarchy.toMap());
+    return hierarchy;
+  }
+
+  Future<void> deleteHierarchy(String id) async {
+    final db = await database;
+    await db.delete('hierarchy', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<Item>> getChildren(String parentId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT i.* FROM items i
+      JOIN hierarchy h ON i.id = h.child_id
+      WHERE h.parent_id = ?
+    ''', [parentId]);
+    return List.generate(maps.length, (i) => Item.fromMap(maps[i]));
+  }
+
+  Future<List<Item>> getParents(String childId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT i.* FROM items i
+      JOIN hierarchy h ON i.id = h.parent_id
+      WHERE h.child_id = ?
+    ''', [childId]);
+    return List.generate(maps.length, (i) => Item.fromMap(maps[i]));
+  }
+
+  // PDS Plans CRUD
+  Future<List<PDSPlan>> getAllPDSPlans() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'pds_plans',
+      orderBy: 'date DESC',
+    );
+    return List.generate(maps.length, (i) => PDSPlan.fromMap(maps[i]));
+  }
+
+  Future<PDSPlan> createPDSPlan(PDSPlan plan) async {
+    final db = await database;
+    await db.insert('pds_plans', plan.toMap());
+    return plan;
+  }
+
+  Future<PDSPlan> updatePDSPlan(String id, Map<String, dynamic> updates) async {
+    final db = await database;
+    updates['updated_at'] = DateTime.now().toIso8601String();
+    await db.update('pds_plans', updates, where: 'id = ?', whereArgs: [id]);
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'pds_plans',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return PDSPlan.fromMap(maps.first);
+  }
+
+  Future<PDSPlan?> getPDSPlanByDate(DateTime date) async {
+    final db = await database;
+    final dateStr = date.toIso8601String().split('T')[0];
+    final List<Map<String, dynamic>> maps = await db.query(
+      'pds_plans',
+      where: 'date = ?',
+      whereArgs: [dateStr],
+    );
+    if (maps.isEmpty) return null;
+    return PDSPlan.fromMap(maps.first);
   }
 }
-
