@@ -26,8 +26,9 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'productivity_app.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -411,5 +412,22 @@ class DatabaseService {
     );
     if (maps.isEmpty) return null;
     return PDSPlan.fromMap(maps.first);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // PDS Plans table 추가
+      await db.execute('''
+        CREATE TABLE pds_plans (
+          id TEXT PRIMARY KEY,
+          date DATE NOT NULL UNIQUE,
+          freeform_plans TEXT,
+          actual_activities TEXT,
+          see_notes TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      ''');
+    }
   }
 }

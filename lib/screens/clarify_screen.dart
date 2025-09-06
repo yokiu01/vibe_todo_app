@@ -11,10 +11,8 @@ class ClarifyScreen extends StatefulWidget {
 }
 
 class _ClarifyScreenState extends State<ClarifyScreen> {
-  int _currentIndex = 0;
   bool? _isActionable;
   ClarificationType? _clarificationType;
-  List<int> _processedIndices = []; // 처리된 항목들의 인덱스
 
   @override
   void initState() {
@@ -24,27 +22,13 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
     });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final itemProvider = context.read<ItemProvider>();
-    if (itemProvider.inboxItems.isNotEmpty && _currentIndex >= itemProvider.inboxItems.length) {
-      _currentIndex = 0;
-    }
-  }
-
+  // 현재 처리할 항목 (항상 첫 번째 항목)
   Item? get _currentItem {
     final itemProvider = context.read<ItemProvider>();
-    if (itemProvider.inboxItems.isEmpty || _currentIndex >= itemProvider.inboxItems.length) {
+    if (itemProvider.inboxItems.isEmpty) {
       return null;
     }
-    return itemProvider.inboxItems[_currentIndex];
-  }
-
-  // 아직 처리되지 않은 항목이 있는지 확인
-  bool get _hasUnprocessedItems {
-    final itemProvider = context.read<ItemProvider>();
-    return _processedIndices.length < itemProvider.inboxItems.length;
+    return itemProvider.inboxItems.first;
   }
 
   void _handleActionableChoice(bool actionable) {
@@ -106,11 +90,7 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
 
       await context.read<ItemProvider>().updateItem(_currentItem!.id, updates);
       
-      // 현재 항목을 처리된 목록에 추가
-      if (!_processedIndices.contains(_currentIndex)) {
-        _processedIndices.add(_currentIndex);
-      }
-      
+      // 다음 항목으로 이동
       _handleNext();
     } catch (e) {
       if (mounted) {
@@ -127,57 +107,49 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
   void _handleNext() {
     final itemProvider = context.read<ItemProvider>();
     
-    // 아직 처리되지 않은 항목이 있는지 확인
-    if (_hasUnprocessedItems) {
-      // 처리되지 않은 항목 중에서 랜덤하게 선택
-      List<int> unprocessedIndices = [];
-      for (int i = 0; i < itemProvider.inboxItems.length; i++) {
-        if (!_processedIndices.contains(i)) {
-          unprocessedIndices.add(i);
+    // 상태 초기화 - 항목이 제거된 후 다음 항목 처리 준비
+    setState(() {
+      _isActionable = null;
+      _clarificationType = null;
+    });
+
+    // 잠시 후 항목 목록이 업데이트되었는지 확인
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final updatedProvider = context.read<ItemProvider>();
+        if (updatedProvider.inboxItems.isEmpty) {
+          // 모든 항목이 처리되었을 때 완료 메시지 표시
+          _showCompletionDialog();
         }
       }
-      
-      if (unprocessedIndices.isNotEmpty) {
-        // 순차적으로 선택 (가장 작은 인덱스부터)
-        unprocessedIndices.sort();
-        setState(() {
-          _currentIndex = unprocessedIndices.first;
-          _isActionable = null;
-          _clarificationType = null;
-        });
-      }
-    } else {
-      // 모든 항목이 처리되었을 때만 완료 메시지 표시
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('완료!'),
-          content: const Text('모든 항목을 명료화했습니다.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                setState(() {
-                  _currentIndex = 0;
-                  _isActionable = null;
-                  _clarificationType = null;
-                  _processedIndices.clear(); // 처리된 목록 초기화
-                });
-              },
-              child: const Text('확인'),
-            ),
-          ],
-        ),
-      );
-    }
+    });
   }
 
   void _handleSkip() {
-    // 건너뛰기한 항목도 처리된 것으로 표시
-    if (!_processedIndices.contains(_currentIndex)) {
-      _processedIndices.add(_currentIndex);
-    }
+    // 건너뛰기도 다음 항목으로 이동
     _handleNext();
+  }
+
+  void _showCompletionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('완료!'),
+        content: const Text('모든 항목을 명료화했습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              setState(() {
+                _isActionable = null;
+                _clarificationType = null;
+              });
+            },
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -259,7 +231,7 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
-              '${_processedIndices.length}/$totalItems',
+              '남은 항목: $totalItems',
               style: const TextStyle(
                 fontSize: 16,
                 color: Color(0xFF64748B),
@@ -387,7 +359,7 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
           children: [
             _buildTypeButton('⏰', '나중에 보기', () => _handleClarificationChoice(ClarificationType.someday)),
             _buildTypeButton('📄', '중간작업물', () => _handleClarificationChoice(ClarificationType.reference)),
-            _buildTypeButton('📝', '레퍼런스', () => _handleClarificationChoice(ClarificationType.reference)),
+            _buildTypeButton('📚', '레퍼런스', () => _handleClarificationChoice(ClarificationType.reference)),
           ],
         ),
       ],
@@ -590,5 +562,4 @@ class _ClarifyScreenState extends State<ClarifyScreen> {
       }
     });
   }
-
 }

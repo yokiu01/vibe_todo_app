@@ -123,29 +123,34 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (itemProvider.areaItems.isEmpty) {
-          return const Center(
-            child: Text(
-              '영역이 없습니다',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF64748B),
-              ),
+        return Column(
+          children: [
+            Expanded(
+              child: itemProvider.areaItems.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '영역이 없습니다',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: itemProvider.areaItems.length,
+                      itemBuilder: (context, index) {
+                        final area = itemProvider.areaItems[index];
+                        return _buildHierarchyCard(
+                          area,
+                          '🏠',
+                          _getAreaDescription(area, itemProvider.items),
+                        );
+                      },
+                    ),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: itemProvider.areaItems.length,
-          itemBuilder: (context, index) {
-            final area = itemProvider.areaItems[index];
-            return _buildHierarchyCard(
-              area,
-              '🏠',
-              _getAreaDescription(area, itemProvider.items),
-            );
-          },
+            _buildAddButton('영역 추가', ItemType.area),
+          ],
         );
       },
     );
@@ -158,29 +163,34 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (itemProvider.resourceItems.isEmpty) {
-          return const Center(
-            child: Text(
-              '자원이 없습니다',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF64748B),
-              ),
+        return Column(
+          children: [
+            Expanded(
+              child: itemProvider.resourceItems.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '자원이 없습니다',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: itemProvider.resourceItems.length,
+                      itemBuilder: (context, index) {
+                        final resource = itemProvider.resourceItems[index];
+                        return _buildHierarchyCard(
+                          resource,
+                          '📚',
+                          _getResourceDescription(resource, itemProvider.items),
+                        );
+                      },
+                    ),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: itemProvider.resourceItems.length,
-          itemBuilder: (context, index) {
-            final resource = itemProvider.resourceItems[index];
-            return _buildHierarchyCard(
-              resource,
-              '📚',
-              _getResourceDescription(resource, itemProvider.items),
-            );
-          },
+            _buildAddButton('자원 추가', ItemType.resource),
+          ],
         );
       },
     );
@@ -441,25 +451,30 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
 
         final goals = itemProvider.items.where((item) => item.type == ItemType.goal).toList();
 
-        if (goals.isEmpty) {
-          return const Center(
-            child: Text(
-              '목표가 없습니다',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF64748B),
-              ),
+        return Column(
+          children: [
+            Expanded(
+              child: goals.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '목표가 없습니다',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: goals.length,
+                      itemBuilder: (context, index) {
+                        final goal = goals[index];
+                        return _buildItemCard(goal, '🎯');
+                      },
+                    ),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: goals.length,
-          itemBuilder: (context, index) {
-            final goal = goals[index];
-            return _buildItemCard(goal, '🎯');
-          },
+            _buildAddButton('목표 추가', ItemType.goal),
+          ],
         );
       },
     );
@@ -474,25 +489,30 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
 
         final projects = itemProvider.items.where((item) => item.type == ItemType.project).toList();
 
-        if (projects.isEmpty) {
-          return const Center(
-            child: Text(
-              '프로젝트가 없습니다',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF64748B),
-              ),
+        return Column(
+          children: [
+            Expanded(
+              child: projects.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '프로젝트가 없습니다',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: projects.length,
+                      itemBuilder: (context, index) {
+                        final project = projects[index];
+                        return _buildItemCard(project, '📋');
+                      },
+                    ),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: projects.length,
-          itemBuilder: (context, index) {
-            final project = projects[index];
-            return _buildItemCard(project, '📋');
-          },
+            _buildAddButton('프로젝트 추가', ItemType.project),
+          ],
         );
       },
     );
@@ -507,25 +527,30 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
 
         final tasks = itemProvider.items.where((item) => item.type == ItemType.task).toList();
 
-        if (tasks.isEmpty) {
-          return const Center(
-            child: Text(
-              '할일이 없습니다',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF64748B),
-              ),
+        return Column(
+          children: [
+            Expanded(
+              child: tasks.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '할일이 없습니다',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: tasks.length,
+                      itemBuilder: (context, index) {
+                        final task = tasks[index];
+                        return _buildItemCard(task, '✅');
+                      },
+                    ),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: tasks.length,
-          itemBuilder: (context, index) {
-            final task = tasks[index];
-            return _buildItemCard(task, '✅');
-          },
+            _buildAddButton('할일 추가', ItemType.task),
+          ],
         );
       },
     );
@@ -540,25 +565,30 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
 
         final notes = itemProvider.items.where((item) => item.type == ItemType.note).toList();
 
-        if (notes.isEmpty) {
-          return const Center(
-            child: Text(
-              '노트가 없습니다',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF64748B),
-              ),
+        return Column(
+          children: [
+            Expanded(
+              child: notes.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '노트가 없습니다',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: notes.length,
+                      itemBuilder: (context, index) {
+                        final note = notes[index];
+                        return _buildItemCard(note, '📝');
+                      },
+                    ),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: notes.length,
-          itemBuilder: (context, index) {
-            final note = notes[index];
-            return _buildItemCard(note, '📝');
-          },
+            _buildAddButton('노트 추가', ItemType.note),
+          ],
         );
       },
     );
@@ -678,6 +708,123 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
         return '명료화됨';
       case ItemStatus.archived:
         return '보관됨';
+    }
+  }
+
+  Widget _buildAddButton(String label, ItemType type) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: ElevatedButton.icon(
+        onPressed: () => _showAddItemDialog(type),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2563EB),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        icon: const Icon(Icons.add, size: 20),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAddItemDialog(ItemType type) {
+    final TextEditingController titleController = TextEditingController();
+    final TextEditingController contentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${_getTypeLabel(type)} 추가'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: '제목',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: contentController,
+              decoration: const InputDecoration(
+                labelText: '내용 (선택사항)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty) {
+                _addItem(type, titleController.text, contentController.text);
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getTypeLabel(ItemType type) {
+    switch (type) {
+      case ItemType.area:
+        return '영역';
+      case ItemType.resource:
+        return '자원';
+      case ItemType.goal:
+        return '목표';
+      case ItemType.project:
+        return '프로젝트';
+      case ItemType.task:
+        return '할일';
+      case ItemType.note:
+        return '노트';
+    }
+  }
+
+  void _addItem(ItemType type, String title, String content) async {
+    final itemProvider = context.read<ItemProvider>();
+    
+    try {
+      await itemProvider.addItem(
+        title: title,
+        content: content.isNotEmpty ? content : null,
+        type: type,
+        status: ItemStatus.active,
+      );
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_getTypeLabel(type)}이 추가되었습니다.'),
+          backgroundColor: const Color(0xFF059669),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('오류가 발생했습니다: $e'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
     }
   }
 }
