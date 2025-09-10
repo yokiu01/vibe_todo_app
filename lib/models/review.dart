@@ -140,3 +140,4 @@ class Review {
     return (completionRate * 100).round();
   }
 }
+

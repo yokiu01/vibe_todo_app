@@ -69,3 +69,4 @@ class QuoteWidget extends StatelessWidget {
 
 
 
+

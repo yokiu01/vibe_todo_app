@@ -44,3 +44,4 @@ class AppSettings {
   String get language => value;
   String get reviewReminder => value;
 }
+

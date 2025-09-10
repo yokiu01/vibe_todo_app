@@ -28,6 +28,30 @@ class ItemProvider with ChangeNotifier {
   
   List<Item> get overdueItems => _items.where((item) => item.isOverdue).toList();
 
+  // 새로운 카테고리별 getter들
+  List<Item> get scheduledItems => _items
+      .where((item) => 
+          item.status == ItemStatus.active && 
+          item.dueDate != null && 
+          !item.isOverdue)
+      .toList()
+      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+
+  List<Item> get nextActionItems => _items
+      .where((item) => 
+          item.status == ItemStatus.active && 
+          item.dueDate == null && 
+          item.delegatedTo == null)
+      .toList()
+      ..sort((a, b) => b.priority.compareTo(a.priority));
+
+  List<Item> get delegatedItems => _items
+      .where((item) => 
+          item.status == ItemStatus.waiting && 
+          item.delegatedTo != null)
+      .toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
   Future<void> loadItems() async {
     _isLoading = true;
     _error = null;
@@ -162,6 +186,9 @@ class ItemProvider with ChangeNotifier {
       'totalTasks': totalTasks,
       'overdueCount': overdueItems.length,
       'inboxCount': inboxItems.length,
+      'scheduledCount': scheduledItems.length,
+      'nextActionCount': nextActionItems.length,
+      'delegatedCount': delegatedItems.length,
     };
   }
 

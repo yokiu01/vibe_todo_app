@@ -137,3 +137,4 @@ class TimeSlot {
     required this.key,
   });
 }
+
