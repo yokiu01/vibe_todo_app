@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/item_provider.dart';
 import '../models/item.dart';
+import '../models/notion_task.dart';
+import '../services/notion_auth_service.dart';
 import '../utils/helpers.dart';
 
 class InboxScreen extends StatefulWidget {
@@ -13,7 +15,11 @@ class InboxScreen extends StatefulWidget {
 
 class _InboxScreenState extends State<InboxScreen> {
   final TextEditingController _textController = TextEditingController();
+  final NotionAuthService _authService = NotionAuthService();
   bool _isAdding = false;
+  bool _isLoadingNotion = false;
+  List<NotionTask> _notionTasks = [];
+  bool _isNotionAuthenticated = false;
 
   @override
   void initState() {
@@ -23,7 +29,50 @@ class _InboxScreenState extends State<InboxScreen> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ItemProvider>().loadItems();
+      _checkNotionAuth();
     });
+  }
+
+  /// Notion 인증 상태 확인
+  Future<void> _checkNotionAuth() async {
+    final isAuth = await _authService.isAuthenticated();
+    setState(() {
+      _isNotionAuthenticated = isAuth;
+    });
+    if (isAuth) {
+      _loadNotionTasks();
+    }
+  }
+
+  /// Notion에서 수집 탭용 할일 로드
+  Future<void> _loadNotionTasks() async {
+    if (!_isNotionAuthenticated) return;
+    
+    setState(() {
+      _isLoadingNotion = true;
+    });
+
+    try {
+      final items = await _authService.apiService!.getInboxTasks();
+      final notionTasks = items.map((item) => NotionTask.fromNotion(item)).toList();
+      
+      setState(() {
+        _notionTasks = notionTasks;
+        _isLoadingNotion = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingNotion = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notion 항목을 불러오는데 실패했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -104,20 +153,35 @@ class _InboxScreenState extends State<InboxScreen> {
                   color: Color(0xFF1E293B),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${itemProvider.inboxItems.length}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${itemProvider.inboxItems.length + _notionTasks.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  if (_isNotionAuthenticated)
+                    IconButton(
+                      onPressed: _loadNotionTasks,
+                      icon: const Icon(
+                        Icons.refresh,
+                        color: Color(0xFF2563EB),
+                        size: 20,
+                      ),
+                      tooltip: 'Notion 항목 새로고침',
+                    ),
+                ],
               ),
             ],
           ),
@@ -233,13 +297,16 @@ class _InboxScreenState extends State<InboxScreen> {
     return Expanded(
       child: Consumer<ItemProvider>(
         builder: (context, itemProvider, child) {
-          if (itemProvider.isLoading) {
+          if (itemProvider.isLoading || _isLoadingNotion) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
 
-          if (itemProvider.inboxItems.isEmpty) {
+          final hasLocalItems = itemProvider.inboxItems.isNotEmpty;
+          final hasNotionItems = _notionTasks.isNotEmpty;
+
+          if (!hasLocalItems && !hasNotionItems) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -273,31 +340,145 @@ class _InboxScreenState extends State<InboxScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  '📋 최근 수집한 항목들',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF374151),
+              // Notion 항목들
+              if (hasNotionItems) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '📋 Notion에서 가져온 항목들',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: itemProvider.inboxItems.length,
-                  itemBuilder: (context, index) {
-                    final item = itemProvider.inboxItems[index];
-                    return _buildInboxItem(item);
-                  },
+                const SizedBox(height: 16),
+                Expanded(
+                  flex: hasLocalItems ? 1 : 2,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _notionTasks.length,
+                    itemBuilder: (context, index) {
+                      final task = _notionTasks[index];
+                      return _buildNotionItem(task);
+                    },
+                  ),
                 ),
-              ),
+              ],
+              
+              // 로컬 항목들
+              if (hasLocalItems) ...[
+                if (hasNotionItems) const SizedBox(height: 24),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '📝 로컬 수집 항목들',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: itemProvider.inboxItems.length,
+                    itemBuilder: (context, index) {
+                      final item = itemProvider.inboxItems[index];
+                      return _buildInboxItem(item);
+                    },
+                  ),
+                ),
+              ],
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildNotionItem(NotionTask task) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: const Border(
+          left: BorderSide(color: Color(0xFF2563EB), width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF1E293B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (task.description != null && task.description!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    task.description!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (task.clarification != null) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '명료화: ${task.clarification}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF2563EB),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                Helpers.formatTime(task.createdAt),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                Helpers.getRelativeTime(task.createdAt),
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

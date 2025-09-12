@@ -53,8 +53,9 @@ dependencies:
   cloud_firestore: ^4.13.6
   firebase_messaging: ^14.7.10
   
-  # Notion API (will be implemented later)
-  # notion_api: ^1.2.0
+  # Notion API
+  oauth2: ^2.0.2
+  url_launcher: ^6.1.14
   
   # Google Calendar API
   googleapis: ^11.4.0

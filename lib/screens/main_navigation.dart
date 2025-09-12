@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'inbox_screen.dart';
-import 'clarify_screen.dart';
 import 'plan_screen.dart';
 import 'review_screen.dart';
 import 'organize_screen.dart';
+import 'collection_screen.dart';
+import 'clarification_screen.dart';
+import 'archive_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -16,19 +18,19 @@ class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const InboxScreen(),
-    const ClarifyScreen(),
+    const CollectionScreen(),
+    const ClarificationScreen(),
     const PlanScreen(),
     const ReviewScreen(),
-    const OrganizeScreen(),
+    const ArchiveScreen(),
   ];
 
   final List<NavigationItem> _navigationItems = [
     NavigationItem(
-      icon: Icons.inbox_outlined,
-      activeIcon: Icons.inbox,
+      icon: Icons.add_task_outlined,
+      activeIcon: Icons.add_task,
       label: '수집',
-      emoji: '🧠',
+      emoji: '📝',
     ),
     NavigationItem(
       icon: Icons.flash_off_outlined,
