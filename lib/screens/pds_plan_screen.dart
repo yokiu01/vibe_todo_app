@@ -27,6 +27,97 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 활성화될 때마다 새로고침
+    context.read<PDSDiaryProvider>().loadPDSPlans();
+    context.read<ItemProvider>().loadItems();
+  }
+
+  /// 날짜 선택 다이얼로그
+  Future<void> _showDatePicker() async {
+    final DateTime? selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('ko', 'KR'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF3B82F6),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF1E293B),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedDate != null && selectedDate != _selectedDate) {
+      setState(() {
+        _selectedDate = selectedDate;
+      });
+      // 날짜가 변경되면 해당 날짜의 데이터 로드
+      context.read<PDSDiaryProvider>().loadPDSPlans();
+      context.read<ItemProvider>().loadItems();
+    }
+  }
+
+
+  /// 로컬에 할일 추가
+  Future<void> _addTaskToLocal(TimeSlot slot) async {
+    final taskText = _freeformPlans[slot.key]?.trim();
+    if (taskText == null || taskText.isEmpty) return;
+
+    try {
+      // 선택된 날짜와 시간으로 DateTime 생성
+      final taskDateTime = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        slot.hour24,
+        0, // 분은 0으로 설정
+      );
+
+      // 로컬 데이터베이스에 할일 추가
+      await context.read<ItemProvider>().addItem(
+        title: taskText,
+        content: '시간: ${slot.display}',
+        type: ItemType.task,
+        status: ItemStatus.active,
+        dueDate: taskDateTime,
+      );
+
+      // 성공 메시지 표시
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"$taskText"이(가) 추가되었습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // 입력 필드 초기화
+      setState(() {
+        _freeformPlans[slot.key] = '';
+      });
+
+      // 데이터 새로고침
+      context.read<ItemProvider>().loadItems();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('할일 추가 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -63,11 +154,34 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF64748B),
+          GestureDetector(
+            onTap: _showDatePicker,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 16,
+                    color: Color(0xFF64748B),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -92,7 +206,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               ),
               // 중앙: 시간표
               _buildCenterColumn(timeSlots),
-              // 우측: 계획된 할일들
+              // 우측: 해당 날짜의 Notion 할일들
               Expanded(
                 flex: 2,
                 child: _buildRightColumn(timeSlots, dailyTasks),
@@ -134,8 +248,29 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
       padding: const EdgeInsets.all(8),
       child: Column(
         children: [
-          _buildColumnHeader('계획된 할일'),
-          ...timeSlots.map((slot) => _buildScheduledTasks(slot, dailyTasks)),
+          _buildColumnHeader('해당 날짜의 할일'),
+          if (dailyTasks.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: const Text(
+                '해당 날짜에 등록된 할일이 없습니다.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            Expanded(
+              child: ListView.builder(
+                itemCount: dailyTasks.length,
+                itemBuilder: (context, index) {
+                  final task = dailyTasks[index];
+                  return _buildLocalTaskCard(task);
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -161,18 +296,89 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
     );
   }
 
+  /// 로컬 할일 카드 위젯
+  Widget _buildLocalTaskCard(Item task) {
+    final isCompleted = task.status == ItemStatus.completed;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isCompleted ? const Color(0xFFF0FDF4) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                size: 16,
+                color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF1E293B),
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (task.content != null && task.content!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              task.content!,
+              style: TextStyle(
+                fontSize: 10,
+                color: const Color(0xFF64748B),
+                decoration: isCompleted ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ],
+          if (task.dueDate != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '시간: ${DateFormat('HH:mm').format(task.dueDate!)}',
+              style: TextStyle(
+                fontSize: 10,
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildFreeformInput(TimeSlot slot) {
     return Container(
       height: 60,
       margin: const EdgeInsets.only(bottom: 2),
       child: TextField(
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           hintText: '할일을 적어보세요',
-          border: OutlineInputBorder(
+          border: const OutlineInputBorder(
             borderSide: BorderSide(color: Color(0xFFE2E8F0)),
           ),
-          contentPadding: EdgeInsets.all(8),
-          hintStyle: TextStyle(fontSize: 11),
+          contentPadding: const EdgeInsets.all(8),
+          hintStyle: const TextStyle(fontSize: 11),
+          suffixIcon: (_freeformPlans[slot.key]?.isNotEmpty == true)
+              ? IconButton(
+                  icon: const Icon(Icons.add_circle, size: 20, color: Color(0xFF3B82F6)),
+                  onPressed: () => _addTaskToLocal(slot),
+                )
+              : null,
         ),
         style: const TextStyle(fontSize: 12),
         maxLines: 2,

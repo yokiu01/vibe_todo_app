@@ -15,10 +15,6 @@ class ItemProvider with ChangeNotifier {
   String? get error => _error;
 
   // Filtered lists
-  List<Item> get inboxItems => _items
-      .where((item) => item.status == ItemStatus.inbox)
-      .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   List<Item> get activeItems => _items.where((item) => item.status == ItemStatus.active).toList();
   List<Item> get completedItems => _items.where((item) => item.status == ItemStatus.completed).toList();
   List<Item> get waitingItems => _items.where((item) => item.status == ItemStatus.waiting).toList();
@@ -71,7 +67,7 @@ class ItemProvider with ChangeNotifier {
     required String title,
     String? content,
     ItemType type = ItemType.task,
-    ItemStatus status = ItemStatus.inbox,
+    ItemStatus status = ItemStatus.active,
     int priority = 3,
     EnergyLevel? energyLevel,
     Context? context,
@@ -185,7 +181,6 @@ class ItemProvider with ChangeNotifier {
       'activeProjects': activeProjects,
       'totalTasks': totalTasks,
       'overdueCount': overdueItems.length,
-      'inboxCount': inboxItems.length,
       'scheduledCount': scheduledItems.length,
       'nextActionCount': nextActionItems.length,
       'delegatedCount': delegatedItems.length,

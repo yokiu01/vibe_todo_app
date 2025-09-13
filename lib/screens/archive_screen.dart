@@ -34,6 +34,15 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
     _loadArchivedItems();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 활성화될 때마다 새로고침
+    if (_isAuthenticated) {
+      _loadArchivedItems();
+    }
+  }
+
   /// 인증 상태 확인
   Future<void> _checkAuthentication() async {
     final isAuth = await _authService.isAuthenticated();

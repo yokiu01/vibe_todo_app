@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/item_provider.dart';
-import '../models/item.dart';
 import '../models/notion_task.dart';
 import '../services/notion_auth_service.dart';
 import '../utils/helpers.dart';
@@ -16,8 +13,8 @@ class InboxScreen extends StatefulWidget {
 class _InboxScreenState extends State<InboxScreen> {
   final TextEditingController _textController = TextEditingController();
   final NotionAuthService _authService = NotionAuthService();
-  bool _isAdding = false;
   bool _isLoadingNotion = false;
+  bool _isAdding = false;
   List<NotionTask> _notionTasks = [];
   bool _isNotionAuthenticated = false;
 
@@ -28,9 +25,23 @@ class _InboxScreenState extends State<InboxScreen> {
       setState(() {}); // 텍스트 변화 감지하여 UI 업데이트
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ItemProvider>().loadItems();
       _checkNotionAuth();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 활성화될 때마다 새로고침
+    if (_isNotionAuthenticated) {
+      _loadNotionTasks();
+    }
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
   }
 
   /// Notion 인증 상태 확인
@@ -75,13 +86,8 @@ class _InboxScreenState extends State<InboxScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _textController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _addItem() async {
+  /// Notion 할일 데이터베이스에 항목 추가
+  Future<void> _addToNotion() async {
     if (_textController.text.trim().isEmpty) return;
 
     setState(() {
@@ -89,15 +95,16 @@ class _InboxScreenState extends State<InboxScreen> {
     });
 
     try {
-      await context.read<ItemProvider>().addItem(
-        title: _textController.text.trim(),
-      );
+      await _authService.apiService!.createTodo(_textController.text.trim());
       _textController.clear();
+      
+      // 목록 새로고침
+      _loadNotionTasks();
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('항목이 수집함에 추가되었습니다'),
+            content: Text('항목이 할일 데이터베이스에 추가되었습니다'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -129,7 +136,6 @@ class _InboxScreenState extends State<InboxScreen> {
           children: [
             _buildHeader(),
             _buildInputSection(),
-            _buildQuickActions(),
             _buildRecentItems(),
           ],
         ),
@@ -138,55 +144,51 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   Widget _buildHeader() {
-    return Consumer<ItemProvider>(
-      builder: (context, itemProvider, child) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            '📋 수집함',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          Row(
             children: [
-              const Text(
-                '🧠 수집함',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_notionTasks.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2563EB),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${itemProvider.inboxItems.length + _notionTasks.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+              const SizedBox(width: 8),
+              if (_isNotionAuthenticated)
+                IconButton(
+                  onPressed: _loadNotionTasks,
+                  icon: const Icon(
+                    Icons.refresh,
+                    color: Color(0xFF2563EB),
+                    size: 20,
                   ),
-                  const SizedBox(width: 8),
-                  if (_isNotionAuthenticated)
-                    IconButton(
-                      onPressed: _loadNotionTasks,
-                      icon: const Icon(
-                        Icons.refresh,
-                        color: Color(0xFF2563EB),
-                        size: 20,
-                      ),
-                      tooltip: 'Notion 항목 새로고침',
-                    ),
-                ],
-              ),
+                  tooltip: 'Notion 항목 새로고침',
+                ),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -211,7 +213,7 @@ class _InboxScreenState extends State<InboxScreen> {
                 ),
                 maxLines: null,
                 textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _addItem(),
+                onSubmitted: (_) => _addToNotion(),
               ),
             ),
           ),
@@ -225,7 +227,7 @@ class _InboxScreenState extends State<InboxScreen> {
             ),
             child: IconButton(
               onPressed: _textController.text.trim().isNotEmpty && !_isAdding
-                  ? _addItem
+                  ? _addToNotion
                   : null,
               icon: _isAdding
                   ? const SizedBox(
@@ -248,155 +250,71 @@ class _InboxScreenState extends State<InboxScreen> {
     );
   }
 
-  Widget _buildQuickActions() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildActionButton(Icons.mic, '음성입력', const Color(0xFF2563EB)),
-          _buildActionButton(Icons.camera_alt, '사진', const Color(0xFF2563EB)),
-          _buildActionButton(Icons.edit, '텍스트', const Color(0xFF2563EB)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton(IconData icon, String label, Color color) {
-    return GestureDetector(
-      onTap: () {
-        // TODO: Implement action
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$label 기능은 준비 중입니다')),
-        );
-      },
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildRecentItems() {
     return Expanded(
-      child: Consumer<ItemProvider>(
-        builder: (context, itemProvider, child) {
-          if (itemProvider.isLoading || _isLoadingNotion) {
-            return const Center(
+      child: _isLoadingNotion
+          ? const Center(
               child: CircularProgressIndicator(),
-            );
-          }
-
-          final hasLocalItems = itemProvider.inboxItems.isNotEmpty;
-          final hasNotionItems = _notionTasks.isNotEmpty;
-
-          if (!hasLocalItems && !hasNotionItems) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.inbox_outlined,
-                    size: 64,
-                    color: Color(0xFF94A3B8),
+            )
+          : _notionTasks.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.inbox_outlined,
+                        size: 64,
+                        color: Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        '수집함이 비어있습니다',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _isNotionAuthenticated
+                            ? '수집된 항목이 없습니다'
+                            : 'Notion에 연결하여 수집을 시작하세요',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 16),
-                  Text(
-                    '수집함이 비어있습니다',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Color(0xFF64748B),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        '📋 최근 추가 항목',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    '위에 무언가를 입력해보세요',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF94A3B8),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _notionTasks.length,
+                        itemBuilder: (context, index) {
+                          final task = _notionTasks[index];
+                          return _buildNotionItem(task);
+                        },
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Notion 항목들
-              if (hasNotionItems) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    '📋 Notion에서 가져온 항목들',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF374151),
-                    ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Expanded(
-                  flex: hasLocalItems ? 1 : 2,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _notionTasks.length,
-                    itemBuilder: (context, index) {
-                      final task = _notionTasks[index];
-                      return _buildNotionItem(task);
-                    },
-                  ),
-                ),
-              ],
-              
-              // 로컬 항목들
-              if (hasLocalItems) ...[
-                if (hasNotionItems) const SizedBox(height: 24),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    '📝 로컬 수집 항목들',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF374151),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: itemProvider.inboxItems.length,
-                    itemBuilder: (context, index) {
-                      final item = itemProvider.inboxItems[index];
-                      return _buildInboxItem(item);
-                    },
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
     );
   }
 
@@ -483,68 +401,4 @@ class _InboxScreenState extends State<InboxScreen> {
     );
   }
 
-  Widget _buildInboxItem(Item item) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: const Border(
-          left: BorderSide(color: Color(0xFF94A3B8), width: 3),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF1E293B),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (item.content != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    item.content!,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF64748B),
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                Helpers.formatTime(item.createdAt),
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                Helpers.getRelativeTime(item.createdAt),
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF94A3B8),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }

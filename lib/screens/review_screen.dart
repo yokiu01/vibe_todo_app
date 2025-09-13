@@ -24,6 +24,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 활성화될 때마다 새로고침
+    context.read<ReviewProvider>().loadReviews();
+    _loadTodaysReview();
+  }
+
   Future<void> _loadTodaysReview() async {
     final reviewProvider = context.read<ReviewProvider>();
     final today = DateTime.now();

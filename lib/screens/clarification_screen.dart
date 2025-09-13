@@ -23,6 +23,15 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
     _loadTodoItems();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 활성화될 때마다 새로고침
+    if (_isAuthenticated) {
+      _loadTodoItems();
+    }
+  }
+
   /// 인증 상태 확인
   Future<void> _checkAuthentication() async {
     final isAuth = await _authService.isAuthenticated();
@@ -93,43 +102,29 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('"${item.title}" 저장소 선택'),
-        content: const Text('이 항목을 어디에 저장하시겠습니까?'),
+        title: Text('"${item.title}" 분류 선택'),
+        content: const Text('이 항목을 어떻게 분류하시겠습니까?'),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _moveToStorage(item, '메모');
+              _moveToMemoWithCategory(item, '중간 작업물');
             },
-            child: const Text('메모'),
+            child: const Text('중간 작업물'),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _moveToStorage(item, '아이디어');
+              _moveToMemoWithCategory(item, '나중에 보기');
             },
-            child: const Text('아이디어'),
+            child: const Text('나중에 보기'),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _moveToStorage(item, '읽을거리');
+              _moveToMemoWithCategory(item, '레퍼런스');
             },
-            child: const Text('읽을거리'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _moveToStorage(item, '취미');
-            },
-            child: const Text('취미'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _moveToStorage(item, '언젠가');
-            },
-            child: const Text('언젠가'),
+            child: const Text('레퍼런스'),
           ),
         ],
       ),
@@ -147,7 +142,7 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _classifyItem(item, '다음행동');
+              _showNextActionDialog(item);
             },
             child: const Text('다음행동'),
           ),
@@ -191,8 +186,8 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
     );
   }
 
-  /// 저장소로 이동
-  Future<void> _moveToStorage(NotionTask item, String storageType) async {
+  /// 메모 데이터베이스로 분류와 함께 이동
+  Future<void> _moveToMemoWithCategory(NotionTask item, String category) async {
     try {
       setState(() {
         _isLoading = true;
@@ -201,22 +196,8 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
       // TODO 데이터베이스에서 삭제
       await _authService.apiService!.deletePage(item.id);
 
-      // 해당 저장소에 추가
-      String databaseId;
-      switch (storageType) {
-        case '메모':
-        case '아이디어':
-        case '읽을거리':
-        case '취미':
-          databaseId = '1159f5e4a81180e3a9f2fdf6634730e6'; // 메모 DB 사용
-          break;
-        case '언젠가':
-          // 언젠가는 TODO 데이터베이스에 명료화를 '언젠가'로 설정
-          databaseId = '1159f5e4a81180e591cbc596ae52f611';
-          break;
-        default:
-          databaseId = '1159f5e4a81180e3a9f2fdf6634730e6';
-      }
+      // 메모 데이터베이스에 추가
+      final databaseId = '1159f5e4a81180e3a9f2fdf6634730e6'; // 메모 DB
 
       final properties = <String, dynamic>{
         '이름': {
@@ -228,25 +209,37 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
             }
           ]
         },
+        '분류': {
+          'select': {
+            'name': category,
+          }
+        },
       };
 
-      if (storageType == '언젠가') {
-        properties['명료화'] = {
-          'select': {
-            'name': '언젠가',
-          }
+      if (item.description != null && item.description!.isNotEmpty) {
+        properties['content'] = {
+          'rich_text': [
+            {
+              'text': {
+                'content': item.description!,
+              }
+            }
+          ]
         };
       }
 
-      await _authService.apiService!.createPage(databaseId, properties);
+      final createdPage = await _authService.apiService!.createPage(databaseId, properties);
+
+      // 영역·자원 데이터베이스 선택 다이얼로그 표시
+      _showAreaResourceDialog(item.title, createdPage['id'] as String);
 
       _loadTodoItems(); // 목록 새로고침
-      _showSuccessSnackBar('"${item.title}"이(가) $storageType에 저장되었습니다.');
+      _showSuccessSnackBar('"${item.title}"이(가) 메모 데이터베이스에 "$category"로 저장되었습니다.');
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showErrorSnackBar('저장 중 오류가 발생했습니다: $e');
+      _showErrorSnackBar('메모로 이동 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -319,24 +312,335 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
         _isLoading = true;
       });
 
-      // description 속성 제거하고 명료화만 업데이트
+      if (classification == '목표' || classification == '프로젝트') {
+        // 목표나 프로젝트인 경우 해당 데이터베이스로 이동
+        await _moveToProjectOrGoal(item, classification);
+      } else if (classification == '위임') {
+        // 위임인 경우 추가 질문 없이 바로 처리
+        final updateProperties = <String, dynamic>{
+          '명료화': {
+            'select': {
+              'name': classification,
+            }
+          }
+        };
+
+        await _authService.apiService!.updatePage(item.id, updateProperties);
+        _loadTodoItems(); // 목록 새로고침
+        _showSuccessSnackBar('"${item.title}"이(가) $classification으로 분류되었습니다.');
+      } else {
+        // 다른 분류들
+        final updateProperties = <String, dynamic>{
+          '명료화': {
+            'select': {
+              'name': classification,
+            }
+          }
+        };
+
+        await _authService.apiService!.updatePage(item.id, updateProperties);
+        _loadTodoItems(); // 목록 새로고침
+        _showSuccessSnackBar('"${item.title}"이(가) $classification으로 분류되었습니다.');
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showErrorSnackBar('분류 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 목표나 프로젝트로 이동
+  Future<void> _moveToProjectOrGoal(NotionTask item, String type) async {
+    try {
+      // 해당 데이터베이스에 새 페이지 생성
+      String databaseId;
+      if (type == '목표') {
+        databaseId = '1159f5e4a81180d092add53ae9df7f05'; // 목표 데이터베이스
+      } else {
+        databaseId = '1159f5e4a81180019f29cdd24d369230'; // 프로젝트 데이터베이스
+      }
+
+      final properties = <String, dynamic>{
+        '이름': {
+          'title': [
+            {
+              'text': {
+                'content': item.title,
+              }
+            }
+          ]
+        },
+      };
+
+      if (item.description != null && item.description!.isNotEmpty) {
+        properties['description'] = {
+          'rich_text': [
+            {
+              'text': {
+                'content': item.description!,
+              }
+            }
+          ]
+        };
+      }
+
+      final createdPage = await _authService.apiService!.createPage(databaseId, properties);
+
+      // 할일 데이터베이스에서 삭제
+      await _authService.apiService!.deletePage(item.id);
+
+      // 영역·자원 데이터베이스 선택 다이얼로그 표시
+      _showAreaResourceDialog(item.title, createdPage['id'] as String);
+
+      _loadTodoItems(); // 목록 새로고침
+      _showSuccessSnackBar('"${item.title}"이(가) $type 데이터베이스로 이동되었습니다.');
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showErrorSnackBar('$type으로 이동 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 영역·자원 데이터베이스 선택 다이얼로그
+  Future<void> _showAreaResourceDialog(String title, String targetDatabaseId) async {
+    try {
+      // 영역·자원 데이터베이스에서 항목들 가져오기
+      final areaResourceItems = await _authService.apiService!.getAreaResourceItems();
+      
+      if (areaResourceItems.isEmpty) {
+        _showErrorSnackBar('영역·자원 데이터베이스에 항목이 없습니다.');
+        return;
+      }
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('"$title" 영역·자원 분류'),
+          content: const Text('이 항목을 어떤 영역·자원으로 분류하시겠습니까?'),
+          actions: [
+            SizedBox(
+              height: 300, // 최대 높이 설정
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...areaResourceItems.map((item) {
+                      final properties = item['properties'] as Map<String, dynamic>?;
+                      final nameProperty = properties?['이름'] as Map<String, dynamic>?;
+                      final titleArray = nameProperty?['title'] as List?;
+                      final itemTitle = titleArray?.isNotEmpty == true 
+                          ? titleArray![0]['text']['content'] as String? 
+                          : 'Unknown';
+                      
+                      return ListTile(
+                        title: Text(itemTitle ?? 'Unknown'),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _addAreaResourceRelation(targetDatabaseId, item['id'] as String, itemTitle ?? 'Unknown');
+                        },
+                      );
+                    }).toList(),
+                    ListTile(
+                      title: const Text('건너뛰기'),
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      _showErrorSnackBar('영역·자원 목록을 가져오는데 실패했습니다: $e');
+    }
+  }
+
+  /// 다음 행동 상황 입력 다이얼로그
+  Future<void> _showNextActionDialog(NotionTask item) async {
+    try {
+      // 기존 다음 행동 상황들을 가져오기
+      final existingNextActions = await _getExistingNextActions();
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('"${item.title}" 다음 행동 상황'),
+          content: const Text('이 항목의 다음 행동 상황을 입력하거나 선택하세요.'),
+          actions: [
+            SizedBox(
+              height: 300,
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 기존 다음 행동 상황들
+                    if (existingNextActions.isNotEmpty) ...[
+                      const Text(
+                        '기존 다음 행동 상황:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...existingNextActions.map((action) => ListTile(
+                        title: Text(action),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _classifyItemWithNextAction(item, action);
+                        },
+                      )).toList(),
+                      const Divider(),
+                    ],
+                    // 새로 입력하는 옵션
+                    ListTile(
+                      title: const Text('새로 입력하기'),
+                      leading: const Icon(Icons.add),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _showCustomNextActionDialog(item);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      _showErrorSnackBar('다음 행동 상황 목록을 가져오는데 실패했습니다: $e');
+    }
+  }
+
+  /// 기존 다음 행동 상황들 가져오기
+  Future<List<String>> _getExistingNextActions() async {
+    try {
+      // 모든 할일을 가져와서 다음 행동 상황이 있는 것들만 필터링
+      final allTasks = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
+        null
+      );
+      
+      final nextActions = <String>{};
+      
+      for (final task in allTasks) {
+        final properties = task['properties'] as Map<String, dynamic>?;
+        if (properties == null) continue;
+        
+        final nextActionProperty = properties['다음 행동 상황'] as Map<String, dynamic>?;
+        final multiSelect = nextActionProperty?['multi_select'] as List?;
+        
+        if (multiSelect != null && multiSelect.isNotEmpty) {
+          for (final item in multiSelect) {
+            final name = item['name'] as String?;
+            if (name != null && name.isNotEmpty) {
+              nextActions.add(name);
+            }
+          }
+        }
+      }
+      
+      return nextActions.toList()..sort();
+    } catch (e) {
+      print('기존 다음 행동 상황 가져오기 오류: $e');
+      return [];
+    }
+  }
+
+  /// 커스텀 다음 행동 상황 입력 다이얼로그
+  void _showCustomNextActionDialog(NotionTask item) {
+    final textController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('"${item.title}" 다음 행동 상황'),
+        content: TextField(
+          controller: textController,
+          decoration: const InputDecoration(
+            labelText: '다음 행동 상황을 입력하세요',
+            hintText: '예: 이메일 보내기, 전화하기, 문서 작성하기',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (textController.text.trim().isNotEmpty) {
+                Navigator.of(context).pop();
+                _classifyItemWithNextAction(item, textController.text.trim());
+              }
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 다음 행동 상황과 함께 항목 분류
+  Future<void> _classifyItemWithNextAction(NotionTask item, String nextAction) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
       final updateProperties = <String, dynamic>{
         '명료화': {
           'select': {
-            'name': classification,
+            'name': '다음행동',
           }
+        },
+        '다음 행동 상황': {
+          'multi_select': [
+            {
+              'name': nextAction,
+            }
+          ]
         }
       };
 
       await _authService.apiService!.updatePage(item.id, updateProperties);
 
       _loadTodoItems(); // 목록 새로고침
-      _showSuccessSnackBar('"${item.title}"이(가) $classification으로 분류되었습니다.');
+      _showSuccessSnackBar('"${item.title}"이(가) 다음행동으로 분류되었습니다. (다음 행동: $nextAction)');
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
       _showErrorSnackBar('분류 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 영역·자원 관계 추가
+  Future<void> _addAreaResourceRelation(String pageId, String areaResourceId, String areaResourceName) async {
+    try {
+      // 페이지에 영역·자원 관계 추가
+      final updateProperties = <String, dynamic>{
+        '영역 · 자원 데이터베이스': {
+          'relation': [
+            {
+              'id': areaResourceId,
+            }
+          ]
+        }
+      };
+
+      await _authService.apiService!.updatePage(pageId, updateProperties);
+      _showSuccessSnackBar('영역·자원 "$areaResourceName"이(가) 추가되었습니다.');
+    } catch (e) {
+      _showErrorSnackBar('영역·자원 추가 중 오류가 발생했습니다: $e');
     }
   }
 

@@ -3,7 +3,6 @@ import 'inbox_screen.dart';
 import 'plan_screen.dart';
 import 'review_screen.dart';
 import 'organize_screen.dart';
-import 'collection_screen.dart';
 import 'clarification_screen.dart';
 import 'archive_screen.dart';
 
@@ -16,9 +15,10 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
+  int _previousIndex = 0;
 
   final List<Widget> _screens = [
-    const CollectionScreen(),
+    const InboxScreen(),
     const ClarificationScreen(),
     const PlanScreen(),
     const ReviewScreen(),
@@ -29,8 +29,8 @@ class _MainNavigationState extends State<MainNavigation> {
     NavigationItem(
       icon: Icons.add_task_outlined,
       activeIcon: Icons.add_task,
-      label: '수집',
-      emoji: '📝',
+      label: 'Notion',
+      emoji: '📋',
     ),
     NavigationItem(
       icon: Icons.flash_off_outlined,
@@ -87,7 +87,14 @@ class _MainNavigationState extends State<MainNavigation> {
                 final isActive = _currentIndex == index;
                 
                 return GestureDetector(
-                  onTap: () => setState(() => _currentIndex = index),
+                  onTap: () {
+                    if (_currentIndex != index) {
+                      setState(() {
+                        _previousIndex = _currentIndex;
+                        _currentIndex = index;
+                      });
+                    }
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(

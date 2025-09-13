@@ -11,6 +11,7 @@ class NotionApiService {
   static const String MEMO_DB_ID = '1159f5e4a81180e3a9f2fdf6634730e6';
   static const String PROJECT_DB_ID = '1159f5e4a81180019f29cdd24d369230';
   static const String GOAL_DB_ID = '1159f5e4a81180d092add53ae9df7f05';
+  static const String AREA_RESOURCE_DB_ID = '1159f5e4a81180d1ab17fa79bb0cf0f4';
   
   static const String _apiKeyKey = 'notion_api_key';
   
@@ -241,7 +242,7 @@ class NotionApiService {
   
   
   /// 프로젝트 생성
-  Future<Map<String, dynamic>> createProject(String title, {String? description}) async {
+  Future<Map<String, dynamic>> createProject(String title, {String? description, String? areaResourceId}) async {
     final properties = <String, dynamic>{
       '이름': <String, dynamic>{
         'title': <Map<String, dynamic>>[
@@ -261,6 +262,16 @@ class NotionApiService {
             'text': <String, dynamic>{
               'content': description,
             }
+          }
+        ]
+      };
+    }
+    
+    if (areaResourceId != null && areaResourceId.isNotEmpty) {
+      properties['영역 · 자원 데이터베이스'] = <String, dynamic>{
+        'relation': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': areaResourceId,
           }
         ]
       };
@@ -270,7 +281,7 @@ class NotionApiService {
   }
   
   /// 목표 생성
-  Future<Map<String, dynamic>> createGoal(String title, {String? description}) async {
+  Future<Map<String, dynamic>> createGoal(String title, {String? description, String? areaResourceId}) async {
     final properties = <String, dynamic>{
       '이름': <String, dynamic>{
         'title': <Map<String, dynamic>>[
@@ -295,11 +306,21 @@ class NotionApiService {
       };
     }
     
+    if (areaResourceId != null && areaResourceId.isNotEmpty) {
+      properties['영역 · 자원 데이터베이스'] = <String, dynamic>{
+        'relation': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': areaResourceId,
+          }
+        ]
+      };
+    }
+    
     return await createPage(GOAL_DB_ID, properties);
   }
   
   /// 메모 생성
-  Future<Map<String, dynamic>> createMemo(String title, {String? content}) async {
+  Future<Map<String, dynamic>> createMemo(String title, {String? content, String? category, String? areaResourceId}) async {
     final properties = <String, dynamic>{
       '이름': <String, dynamic>{
         'title': <Map<String, dynamic>>[
@@ -324,9 +345,41 @@ class NotionApiService {
       };
     }
     
+    if (category != null && category.isNotEmpty) {
+      properties['분류'] = <String, dynamic>{
+        'select': <String, dynamic>{
+          'name': category,
+        }
+      };
+    }
+    
+    if (areaResourceId != null && areaResourceId.isNotEmpty) {
+      properties['영역 · 자원 데이터베이스'] = <String, dynamic>{
+        'relation': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': areaResourceId,
+          }
+        ]
+      };
+    }
+    
     return await createPage(MEMO_DB_ID, properties);
   }
   
+
+  /// 특정 날짜의 할일 조회
+  Future<List<Map<String, dynamic>>> getTasksByDate(DateTime date) async {
+    final dateStr = date.toIso8601String().split('T')[0]; // YYYY-MM-DD 형식
+    
+    final filter = <String, dynamic>{
+      'property': '날짜',
+      'date': <String, dynamic>{
+        'equals': dateStr,
+      }
+    };
+    
+    return await queryDatabase(TODO_DB_ID, filter);
+  }
 
   /// 수집 탭용 할일 조회 (명료화가 비어있고 완료가 체크되지 않은 항목들)
   Future<List<Map<String, dynamic>>> getInboxTasks() async {
@@ -352,20 +405,137 @@ class NotionApiService {
 
   /// 명료화 탭용 할일 조회 (명료화가 필요한 모든 항목들)
   Future<List<Map<String, dynamic>>> getClarificationTasks() async {
-    // Notion API는 복잡한 중첩 필터를 지원하지 않으므로 간단한 필터 사용
+    // 완료되지 않은 모든 항목을 가져온 후 클라이언트에서 필터링
+    final filter = <String, dynamic>{
+      'property': '완료',
+      'checkbox': <String, dynamic>{
+        'equals': false,
+      }
+    };
+    
+    final allTasks = await queryDatabase(TODO_DB_ID, filter);
+    
+    // 클라이언트에서 명료화가 필요한 항목들만 필터링
+    return allTasks.where((task) {
+      final properties = task['properties'] as Map<String, dynamic>?;
+      if (properties == null) return false;
+      
+      final clarification = properties['명료화'] as Map<String, dynamic>?;
+      final clarificationValue = clarification?['select']?['name'] as String?;
+      
+      // 명료화가 비어있으면 명료화 필요
+      if (clarificationValue == null || clarificationValue.isEmpty) {
+        return true;
+      }
+      
+      // 명료화가 '할일'인데 날짜가 비어있으면 다시 명료화 필요
+      if (clarificationValue == '할일') {
+        final date = properties['날짜'] as Map<String, dynamic>?;
+        final dateValue = date?['date']?['start'] as String?;
+        return dateValue == null || dateValue.isEmpty;
+      }
+      
+      // 명료화가 '위임'인 경우는 담당자가 비어있어도 됨 (요청사항 반영)
+      if (clarificationValue == '위임') {
+        return false; // 위임은 담당자가 비어있어도 명료화 완료로 간주
+      }
+      
+      // 명료화가 '프로젝트'나 '목표'인 경우는 해당 데이터베이스로 이동되므로 명료화 완료
+      if (clarificationValue == '프로젝트' || clarificationValue == '목표') {
+        return false;
+      }
+      
+      // 다른 경우들은 명료화가 완료된 것으로 간주
+      return false;
+    }).toList();
+  }
+
+  /// 기한 지난 할일 조회 (날짜가 이전이고 완료되지 않은 항목)
+  Future<List<Map<String, dynamic>>> getOverdueTasks() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    
     final filter = <String, dynamic>{
       'and': <Map<String, dynamic>>[
-        // 완료되지 않은 항목들만
         <String, dynamic>{
           'property': '완료',
           'checkbox': <String, dynamic>{
             'equals': false,
           }
         },
-        // 명료화가 비어있는 것 (가장 기본적인 명료화가 필요한 항목)
+        <String, dynamic>{
+          'property': '날짜',
+          'date': <String, dynamic>{
+            'before': today.toIso8601String().split('T')[0], // YYYY-MM-DD 형식 (당일 불포함)
+          }
+        }
+      ]
+    };
+    
+    return await queryDatabase(TODO_DB_ID, filter);
+  }
+  
+  /// 진행 중인 프로젝트별 할일 조회 (완료되지 않은 모든 할일)
+  Future<List<Map<String, dynamic>>> getInProgressTasks() async {
+    // 완료되지 않은 모든 할일을 반환
+    final filter = <String, dynamic>{
+      'property': '완료',
+      'checkbox': <String, dynamic>{
+        'equals': false,
+      }
+    };
+    
+    return await queryDatabase(TODO_DB_ID, filter);
+  }
+  
+  /// 다음 행동 할일 조회 (다음 행동 상황이 비어있지 않고 완료되지 않고 날짜가 비어있는 할일)
+  Future<List<Map<String, dynamic>>> getNextActionTasks() async {
+    final filter = <String, dynamic>{
+      'and': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'property': '완료',
+          'checkbox': <String, dynamic>{
+            'equals': false,
+          }
+        },
+        <String, dynamic>{
+          'property': '다음 행동 상황',
+          'multi_select': <String, dynamic>{
+            'is_not_empty': true,
+          }
+        },
+        <String, dynamic>{
+          'property': '날짜',
+          'date': <String, dynamic>{
+            'is_empty': true,
+          }
+        }
+      ]
+    };
+    
+    return await queryDatabase(TODO_DB_ID, filter);
+  }
+  
+  /// 위임된 할일 조회 (명료화가 위임이고 날짜가 비어있고 완료되지 않은 할일)
+  Future<List<Map<String, dynamic>>> getDelegatedTasks() async {
+    final filter = <String, dynamic>{
+      'and': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'property': '완료',
+          'checkbox': <String, dynamic>{
+            'equals': false,
+          }
+        },
         <String, dynamic>{
           'property': '명료화',
           'select': <String, dynamic>{
+            'equals': '위임',
+          }
+        },
+        <String, dynamic>{
+          'property': '날짜',
+          'date': <String, dynamic>{
             'is_empty': true,
           }
         }
@@ -375,52 +545,9 @@ class NotionApiService {
     return await queryDatabase(TODO_DB_ID, filter);
   }
 
-  /// 기한 지난 할일 조회 (완료되지 않은 모든 항목)
-  Future<List<Map<String, dynamic>>> getOverdueTasks() async {
-    final filter = <String, dynamic>{
-      'property': '완료',
-      'checkbox': <String, dynamic>{
-        'equals': false,
-      }
-    };
-    
-    return await queryDatabase(TODO_DB_ID, filter);
-  }
-  
-  /// 진행 중인 할일 조회 (완료되지 않은 모든 항목)
-  Future<List<Map<String, dynamic>>> getInProgressTasks() async {
-    final filter = <String, dynamic>{
-      'property': '완료',
-      'checkbox': <String, dynamic>{
-        'equals': false,
-      }
-    };
-    
-    return await queryDatabase(TODO_DB_ID, filter);
-  }
-  
-  /// 다음 행동 할일 조회 (완료되지 않은 모든 항목)
-  Future<List<Map<String, dynamic>>> getNextActionTasks() async {
-    final filter = <String, dynamic>{
-      'property': '완료',
-      'checkbox': <String, dynamic>{
-        'equals': false,
-      }
-    };
-    
-    return await queryDatabase(TODO_DB_ID, filter);
-  }
-  
-  /// 위임된 할일 조회 (완료되지 않은 모든 항목)
-  Future<List<Map<String, dynamic>>> getDelegatedTasks() async {
-    final filter = <String, dynamic>{
-      'property': '완료',
-      'checkbox': <String, dynamic>{
-        'equals': false,
-      }
-    };
-    
-    return await queryDatabase(TODO_DB_ID, filter);
+  /// 영역 · 자원 데이터베이스 데이터베이스에서 항목들 조회
+  Future<List<Map<String, dynamic>>> getAreaResourceItems() async {
+    return await queryDatabase(AREA_RESOURCE_DB_ID, null);
   }
 
   /// 특정 데이터베이스만 허용하는 필터링
@@ -430,6 +557,7 @@ class NotionApiService {
       PROJECT_DB_ID,   // 프로젝트
       GOAL_DB_ID,      // 목표
       MEMO_DB_ID,      // 노트 (영역.자원)
+      AREA_RESOURCE_DB_ID, // 영역 · 자원 데이터베이스
     ];
     return allowedDatabases.contains(databaseId);
   }

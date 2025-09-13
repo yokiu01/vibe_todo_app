@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/pds_diary_provider.dart';
+import '../providers/item_provider.dart';
 import '../models/pds_plan.dart';
+import '../models/item.dart';
 
 class PDSDoSeeScreen extends StatefulWidget {
   const PDSDoSeeScreen({super.key});
@@ -21,8 +23,17 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PDSDiaryProvider>().loadPDSPlans();
+      context.read<ItemProvider>().loadItems();
       _loadCurrentPlan();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 활성화될 때마다 새로고침
+    context.read<PDSDiaryProvider>().loadPDSPlans();
+    context.read<ItemProvider>().loadItems();
   }
 
   void _loadCurrentPlan() {
@@ -35,6 +46,16 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         _seeNotes = currentPlan.seeNotes ?? '';
       });
     }
+  }
+
+  /// 해당 날짜의 할일 가져오기
+  List<Item> _getDailyTasks(List<Item> allItems) {
+    return allItems.where((item) {
+      if (item.dueDate == null) return false;
+      return item.dueDate!.year == _selectedDate.year &&
+             item.dueDate!.month == _selectedDate.month &&
+             item.dueDate!.day == _selectedDate.day;
+    }).toList();
   }
 
   @override
@@ -87,11 +108,12 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
   }
 
   Widget _buildDoSeeLayout() {
-    return Consumer<PDSDiaryProvider>(
-      builder: (context, pdsProvider, child) {
+    return Consumer2<PDSDiaryProvider, ItemProvider>(
+      builder: (context, pdsProvider, itemProvider, child) {
         final timeSlots = PDSPlan.generateTimeSlots();
         final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
         final plannedActivities = currentPlan?.freeformPlans ?? {};
+        final dailyTasks = _getDailyTasks(itemProvider.items);
 
         return SingleChildScrollView(
           child: Column(
@@ -100,10 +122,10 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 좌측: PLAN에서 작성한 내용
+                  // 좌측: PLAN에서 작성한 내용과 할일
                   Expanded(
                     flex: 2,
-                    child: _buildLeftColumn(timeSlots, plannedActivities),
+                    child: _buildLeftColumn(timeSlots, plannedActivities, dailyTasks),
                   ),
                   // 중앙: 시간표
                   _buildCenterColumn(timeSlots),
@@ -123,13 +145,13 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
     );
   }
 
-  Widget _buildLeftColumn(List<TimeSlot> timeSlots, Map<String, String> plannedActivities) {
+  Widget _buildLeftColumn(List<TimeSlot> timeSlots, Map<String, String> plannedActivities, List<Item> dailyTasks) {
     return Container(
       padding: const EdgeInsets.all(8),
       child: Column(
         children: [
           _buildColumnHeader('PLAN'),
-          ...timeSlots.map((slot) => _buildPlannedDisplay(slot, plannedActivities)),
+          ...timeSlots.map((slot) => _buildPlannedDisplay(slot, plannedActivities, dailyTasks)),
         ],
       ),
     );
@@ -180,8 +202,15 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
     );
   }
 
-  Widget _buildPlannedDisplay(TimeSlot slot, Map<String, String> plannedActivities) {
+  Widget _buildPlannedDisplay(TimeSlot slot, Map<String, String> plannedActivities, List<Item> dailyTasks) {
     final plannedText = plannedActivities[slot.key] ?? '';
+    
+    // 해당 시간대의 할일 찾기
+    final slotTasks = dailyTasks.where((task) {
+      if (task.dueDate == null) return false;
+      final taskHour = task.dueDate!.hour;
+      return taskHour == slot.hour24;
+    }).toList();
     
     return Container(
       height: 60,
@@ -192,15 +221,42 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        plannedText,
-        style: const TextStyle(
-          fontSize: 11,
-          color: Color(0xFF64748B),
-          fontStyle: FontStyle.italic,
-        ),
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (plannedText.isNotEmpty)
+            Text(
+              plannedText,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Color(0xFF64748B),
+                fontStyle: FontStyle.italic,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          if (slotTasks.isNotEmpty) ...[
+            if (plannedText.isNotEmpty) const SizedBox(height: 4),
+            ...slotTasks.map((task) => Container(
+              margin: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: task.status == ItemStatus.completed ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                task.title,
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
+          ],
+        ],
       ),
     );
   }

@@ -39,6 +39,15 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 화면이 활성화될 때마다 새로고침
+    if (_isAuthenticated) {
+      _loadAllTasks();
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
@@ -622,7 +631,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         trailing: task.isCompleted
             ? const Icon(Icons.check_circle, color: Colors.green)
             : const Icon(Icons.radio_button_unchecked),
-        onTap: () => _showTaskEditDialog(task),
+        onTap: () => _showDatePickerDialog(task),
       ),
     );
   }
@@ -672,6 +681,40 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         return Icons.folder;
       default:
         return Icons.task;
+    }
+  }
+
+  /// 날짜 선택 다이얼로그
+  Future<void> _showDatePickerDialog(NotionTask task) async {
+    final DateTime? selectedDate = await showDatePicker(
+      context: context,
+      initialDate: task.dueDate ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('ko', 'KR'),
+    );
+
+    if (selectedDate != null) {
+      await _updateTaskDate(task, selectedDate);
+    }
+  }
+
+  /// 할일 날짜 업데이트
+  Future<void> _updateTaskDate(NotionTask task, DateTime date) async {
+    try {
+      final properties = <String, dynamic>{
+        '날짜': {
+          'date': {
+            'start': date.toIso8601String().split('T')[0], // YYYY-MM-DD 형식
+          }
+        }
+      };
+
+      await _authService.apiService!.updatePage(task.id, properties);
+      _loadAllTasks(); // 모든 탭 새로고침
+      _showSuccessSnackBar('날짜가 추가되었습니다.');
+    } catch (e) {
+      _showErrorSnackBar('날짜 추가에 실패했습니다: $e');
     }
   }
 
