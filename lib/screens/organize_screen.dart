@@ -26,14 +26,23 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildViewSelector(),
-            Expanded(
-              child: _buildContent(),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            context.read<ItemProvider>().loadItems();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildHeader(),
+                _buildViewSelector(),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height - 200,
+                  child: _buildContent(),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

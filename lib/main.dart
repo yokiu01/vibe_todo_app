@@ -7,6 +7,7 @@ import 'providers/daily_plan_provider.dart';
 import 'providers/review_provider.dart';
 import 'providers/pds_diary_provider.dart';
 import 'screens/main_navigation.dart';
+import 'widgets/lock_screen_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,8 +15,37 @@ void main() async {
   runApp(const ProductivityApp());
 }
 
-class ProductivityApp extends StatelessWidget {
+class ProductivityApp extends StatefulWidget {
   const ProductivityApp({super.key});
+
+  @override
+  State<ProductivityApp> createState() => _ProductivityAppState();
+}
+
+class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showLockScreenOverlay(context);
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -216,18 +216,6 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
         },
       };
 
-      if (item.description != null && item.description!.isNotEmpty) {
-        properties['content'] = {
-          'rich_text': [
-            {
-              'text': {
-                'content': item.description!,
-              }
-            }
-          ]
-        };
-      }
-
       final createdPage = await _authService.apiService!.createPage(databaseId, properties);
 
       // 영역·자원 데이터베이스 선택 다이얼로그 표시
@@ -404,7 +392,7 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
   }
 
   /// 영역·자원 데이터베이스 선택 다이얼로그
-  Future<void> _showAreaResourceDialog(String title, String targetDatabaseId) async {
+  Future<void> _showAreaResourceDialog(String title, String targetPageId) async {
     try {
       // 영역·자원 데이터베이스에서 항목들 가져오기
       final areaResourceItems = await _authService.apiService!.getAreaResourceItems();
@@ -421,7 +409,7 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
           content: const Text('이 항목을 어떤 영역·자원으로 분류하시겠습니까?'),
           actions: [
             SizedBox(
-              height: 300, // 최대 높이 설정
+              height: 300,
               width: double.maxFinite,
               child: SingleChildScrollView(
                 child: Column(
@@ -439,7 +427,7 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
                         title: Text(itemTitle ?? 'Unknown'),
                         onTap: () {
                           Navigator.of(context).pop();
-                          _addAreaResourceRelation(targetDatabaseId, item['id'] as String, itemTitle ?? 'Unknown');
+                          _addAreaResourceRelation(targetPageId, item['id'] as String, itemTitle ?? 'Unknown');
                         },
                       );
                     }).toList(),
@@ -467,50 +455,192 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
       
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text('"${item.title}" 다음 행동 상황'),
-          content: const Text('이 항목의 다음 행동 상황을 입력하거나 선택하세요.'),
-          actions: [
-            SizedBox(
-              height: 300,
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 기존 다음 행동 상황들
-                    if (existingNextActions.isNotEmpty) ...[
-                      const Text(
-                        '기존 다음 행동 상황:',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+        builder: (context) => Dialog(
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: Column(
+              children: [
+                // 헤더
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF2563EB),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '"${item.title}" 다음 행동 상황',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      ...existingNextActions.map((action) => ListTile(
-                        title: Text(action),
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          _classifyItemWithNextAction(item, action);
-                        },
-                      )).toList(),
-                      const Divider(),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                        ),
+                      ),
                     ],
-                    // 새로 입력하는 옵션
-                    ListTile(
-                      title: const Text('새로 입력하기'),
-                      leading: const Icon(Icons.add),
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        _showCustomNextActionDialog(item);
-                      },
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                // 내용
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '이 항목의 다음 행동 상황을 입력하거나 선택하세요.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        // 기존 다음 행동 상황들
+                        if (existingNextActions.isNotEmpty) ...[
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.history,
+                                size: 20,
+                                color: Color(0xFF2563EB),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '기존 다음 행동 상황 (${existingNextActions.length}개)',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Color(0xFF1E293B),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // 그리드 형태로 표시하여 더 많은 항목을 보여줌
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 3.5,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                            ),
+                            itemCount: existingNextActions.length,
+                            itemBuilder: (context, index) {
+                              final action = existingNextActions[index];
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.of(context).pop();
+                                    _classifyItemWithNextAction(item, action);
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            action,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: Color(0xFF1E293B),
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const Icon(
+                                          Icons.arrow_forward_ios,
+                                          size: 12,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          const Divider(),
+                          const SizedBox(height: 20),
+                        ],
+                        // 새로 입력하는 옵션
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF2563EB).withOpacity(0.3),
+                            ),
+                          ),
+                          child: ListTile(
+                            leading: const Icon(
+                              Icons.add,
+                              color: Color(0xFF2563EB),
+                            ),
+                            title: const Text(
+                              '새로 입력하기',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                            subtitle: const Text(
+                              '새로운 다음 행동 상황을 직접 입력하세요',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _showCustomNextActionDialog(item);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     } catch (e) {
@@ -521,35 +651,158 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
   /// 기존 다음 행동 상황들 가져오기
   Future<List<String>> _getExistingNextActions() async {
     try {
-      // 모든 할일을 가져와서 다음 행동 상황이 있는 것들만 필터링
-      final allTasks = await _authService.apiService!.queryDatabase(
-        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
-        null
-      );
-      
       final nextActions = <String>{};
       
-      for (final task in allTasks) {
-        final properties = task['properties'] as Map<String, dynamic>?;
-        if (properties == null) continue;
+      // 1. 할일 데이터베이스에서 다음 행동 상황 가져오기
+      try {
+        final todoTasks = await _authService.apiService!.queryDatabase(
+          '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
+          null
+        );
         
-        final nextActionProperty = properties['다음 행동 상황'] as Map<String, dynamic>?;
-        final multiSelect = nextActionProperty?['multi_select'] as List?;
-        
-        if (multiSelect != null && multiSelect.isNotEmpty) {
-          for (final item in multiSelect) {
-            final name = item['name'] as String?;
-            if (name != null && name.isNotEmpty) {
-              nextActions.add(name);
+        for (final task in todoTasks) {
+          final properties = task['properties'] as Map<String, dynamic>?;
+          if (properties == null) continue;
+          
+          final nextActionProperty = properties['다음 행동 상황'] as Map<String, dynamic>?;
+          final multiSelect = nextActionProperty?['multi_select'] as List?;
+          
+          if (multiSelect != null && multiSelect.isNotEmpty) {
+            for (final item in multiSelect) {
+              final name = item['name'] as String?;
+              if (name != null && name.isNotEmpty) {
+                nextActions.add(name);
+              }
             }
           }
         }
+      } catch (e) {
+        print('할일 데이터베이스에서 다음 행동 상황 가져오기 오류: $e');
+      }
+      
+      // 2. 프로젝트 데이터베이스에서 다음 행동 상황 가져오기
+      try {
+        final projectTasks = await _authService.apiService!.queryDatabase(
+          '1159f5e4a81180019f29cdd24d369230', // PROJECT_DB_ID
+          null
+        );
+        
+        for (final task in projectTasks) {
+          final properties = task['properties'] as Map<String, dynamic>?;
+          if (properties == null) continue;
+          
+          final nextActionProperty = properties['다음 행동 상황'] as Map<String, dynamic>?;
+          final multiSelect = nextActionProperty?['multi_select'] as List?;
+          
+          if (multiSelect != null && multiSelect.isNotEmpty) {
+            for (final item in multiSelect) {
+              final name = item['name'] as String?;
+              if (name != null && name.isNotEmpty) {
+                nextActions.add(name);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print('프로젝트 데이터베이스에서 다음 행동 상황 가져오기 오류: $e');
+      }
+      
+      // 3. 목표 데이터베이스에서 다음 행동 상황 가져오기
+      try {
+        final goalTasks = await _authService.apiService!.queryDatabase(
+          '1159f5e4a81180d092add53ae9df7f05', // GOAL_DB_ID
+          null
+        );
+        
+        for (final task in goalTasks) {
+          final properties = task['properties'] as Map<String, dynamic>?;
+          if (properties == null) continue;
+          
+          final nextActionProperty = properties['다음 행동 상황'] as Map<String, dynamic>?;
+          final multiSelect = nextActionProperty?['multi_select'] as List?;
+          
+          if (multiSelect != null && multiSelect.isNotEmpty) {
+            for (final item in multiSelect) {
+              final name = item['name'] as String?;
+              if (name != null && name.isNotEmpty) {
+                nextActions.add(name);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print('목표 데이터베이스에서 다음 행동 상황 가져오기 오류: $e');
+      }
+      
+      // 4. 메모 데이터베이스에서 다음 행동 상황 가져오기
+      try {
+        final memoTasks = await _authService.apiService!.queryDatabase(
+          '1159f5e4a81180e3a9f2fdf6634730e6', // MEMO_DB_ID
+          null
+        );
+        
+        for (final task in memoTasks) {
+          final properties = task['properties'] as Map<String, dynamic>?;
+          if (properties == null) continue;
+          
+          final nextActionProperty = properties['다음 행동 상황'] as Map<String, dynamic>?;
+          final multiSelect = nextActionProperty?['multi_select'] as List?;
+          
+          if (multiSelect != null && multiSelect.isNotEmpty) {
+            for (final item in multiSelect) {
+              final name = item['name'] as String?;
+              if (name != null && name.isNotEmpty) {
+                nextActions.add(name);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print('메모 데이터베이스에서 다음 행동 상황 가져오기 오류: $e');
+      }
+      
+      // 5. 기본적인 다음 행동 상황들 추가 (데이터가 없을 때 사용)
+      if (nextActions.isEmpty) {
+        nextActions.addAll([
+          '이메일 보내기',
+          '전화하기',
+          '문서 작성하기',
+          '회의 일정 잡기',
+          '검토하기',
+          '분석하기',
+          '계획 세우기',
+          '조사하기',
+          '연락하기',
+          '정리하기',
+          '준비하기',
+          '확인하기',
+          '보고하기',
+          '논의하기',
+          '실행하기',
+        ]);
       }
       
       return nextActions.toList()..sort();
     } catch (e) {
       print('기존 다음 행동 상황 가져오기 오류: $e');
-      return [];
+      // 오류 발생 시 기본 목록 반환
+      return [
+        '이메일 보내기',
+        '전화하기',
+        '문서 작성하기',
+        '회의 일정 잡기',
+        '검토하기',
+        '분석하기',
+        '계획 세우기',
+        '조사하기',
+        '연락하기',
+        '정리하기',
+        '준비하기',
+        '확인하기',
+        '보고하기',
+        '논의하기',
+        '실행하기',
+      ];
     }
   }
 
@@ -785,13 +1038,7 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
       appBar: AppBar(
         title: const Text('명료화'),
         actions: [
-          if (_isAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _logoutFromNotion,
-              tooltip: 'Notion 로그아웃',
-            )
-          else
+          if (!_isAuthenticated)
             IconButton(
               icon: const Icon(Icons.login),
               onPressed: _showApiKeyDialog,
@@ -810,31 +1057,40 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
 
   Widget _buildBody() {
     if (!_isAuthenticated) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.login,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Notion API 키를 입력하면\n명료화를 시작할 수 있습니다.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
+      return RefreshIndicator(
+        onRefresh: _checkAuthentication,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            height: MediaQuery.of(context).size.height - 200,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.login,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Notion API 키를 입력하면\n명료화를 시작할 수 있습니다.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _showApiKeyDialog,
+                    icon: const Icon(Icons.key),
+                    label: const Text('API 키 입력'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _showApiKeyDialog,
-              icon: const Icon(Icons.key),
-              label: const Text('API 키 입력'),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -846,45 +1102,57 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
     }
 
     if (_todoItems.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.inbox,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '명료화할 항목이 없습니다.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
+      return RefreshIndicator(
+        onRefresh: _loadTodoItems,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            height: MediaQuery.of(context).size.height - 200,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.inbox,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '명료화할 항목이 없습니다.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '완료되지 않은 모든 할일 항목들이 표시됩니다.\n각 항목을 분류하여 관리할 수 있습니다.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '완료되지 않은 모든 할일 항목들이 표시됩니다.\n각 항목을 분류하여 관리할 수 있습니다.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _todoItems.length,
-      itemBuilder: (context, index) {
-        final item = _todoItems[index];
-        return _buildItemCard(item);
-      },
+    return RefreshIndicator(
+      onRefresh: _loadTodoItems,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _todoItems.length,
+        itemBuilder: (context, index) {
+          final item = _todoItems[index];
+          return _buildItemCard(item);
+        },
+      ),
     );
   }
 

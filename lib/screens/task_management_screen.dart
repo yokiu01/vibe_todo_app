@@ -425,37 +425,60 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
             Tab(text: '위임'),
           ],
         ),
-        actions: [
-          if (_isAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _logoutFromNotion,
-              tooltip: 'Notion 로그아웃',
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.login),
-              onPressed: _showApiKeyDialog,
-              tooltip: 'Notion API 키 입력',
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isAuthenticated ? _loadAllTasks : null,
-            tooltip: '새로고침',
-          ),
-        ],
       ),
       body: _isAuthenticated
-          ? TabBarView(
-              controller: _tabController,
-              children: [
-                _buildOverdueTab(),
-                _buildInProgressTab(),
-                _buildNextActionTab(),
-                _buildDelegatedTab(),
-              ],
+          ? RefreshIndicator(
+              onRefresh: _loadAllTasks,
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildOverdueTab(),
+                  _buildInProgressTab(),
+                  _buildNextActionTab(),
+                  _buildDelegatedTab(),
+                ],
+              ),
             )
-          : _buildNotAuthenticatedView(),
+          : _buildLoginPrompt(),
+    );
+  }
+
+  Widget _buildLoginPrompt() {
+    return RefreshIndicator(
+      onRefresh: _checkAuthentication,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Container(
+          height: MediaQuery.of(context).size.height - 200,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.login,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Notion API 키를 입력하면\n할일 관리를 시작할 수 있습니다.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _showApiKeyDialog,
+                  icon: const Icon(Icons.key),
+                  label: const Text('API 키 입력'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -490,42 +513,54 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   }
 
   Widget _buildOverdueTab() {
-    return _buildTaskList(
-      _overdueTasks,
-      _loadingStates['overdue']!,
-      '기한이 지난 할일이 없습니다.',
-      Icons.warning,
-      Colors.red,
+    return RefreshIndicator(
+      onRefresh: _loadAllTasks,
+      child: _buildTaskList(
+        _overdueTasks,
+        _loadingStates['overdue']!,
+        '기한이 지난 할일이 없습니다.',
+        Icons.warning,
+        Colors.red,
+      ),
     );
   }
 
   Widget _buildInProgressTab() {
-    return _buildTaskList(
-      _inProgressTasks,
-      _loadingStates['inProgress']!,
-      '진행 중인 할일이 없습니다.',
-      Icons.play_arrow,
-      Colors.blue,
+    return RefreshIndicator(
+      onRefresh: _loadAllTasks,
+      child: _buildTaskList(
+        _inProgressTasks,
+        _loadingStates['inProgress']!,
+        '진행 중인 할일이 없습니다.',
+        Icons.play_arrow,
+        Colors.blue,
+      ),
     );
   }
 
   Widget _buildNextActionTab() {
-    return _buildTaskList(
-      _nextActionTasks,
-      _loadingStates['nextAction']!,
-      '다음 행동 할일이 없습니다.',
-      Icons.arrow_forward,
-      Colors.purple,
+    return RefreshIndicator(
+      onRefresh: _loadAllTasks,
+      child: _buildTaskList(
+        _nextActionTasks,
+        _loadingStates['nextAction']!,
+        '다음 행동 할일이 없습니다.',
+        Icons.arrow_forward,
+        Colors.purple,
+      ),
     );
   }
 
   Widget _buildDelegatedTab() {
-    return _buildTaskList(
-      _delegatedTasks,
-      _loadingStates['delegated']!,
-      '위임된 할일이 없습니다.',
-      Icons.person,
-      Colors.teal,
+    return RefreshIndicator(
+      onRefresh: _loadAllTasks,
+      child: _buildTaskList(
+        _delegatedTasks,
+        _loadingStates['delegated']!,
+        '위임된 할일이 없습니다.',
+        Icons.person,
+        Colors.teal,
+      ),
     );
   }
 

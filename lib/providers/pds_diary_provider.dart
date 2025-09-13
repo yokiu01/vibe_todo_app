@@ -135,6 +135,33 @@ class PDSDiaryProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  Future<void> saveFreeformPlan(DateTime date, String timeSlot, String content) async {
+    try {
+      final existingPlan = getPDSPlan(date);
+      Map<String, String> freeformPlans = {};
+      
+      if (existingPlan != null && existingPlan.freeformPlans != null) {
+        freeformPlans = Map<String, String>.from(existingPlan.freeformPlans!);
+      }
+      
+      freeformPlans[timeSlot] = content;
+      
+      await createOrUpdatePDSPlan(
+        date: date,
+        freeformPlans: freeformPlans,
+        actualActivities: existingPlan?.actualActivities,
+        seeNotes: existingPlan?.seeNotes,
+      );
+      
+      // 로컬 데이터도 업데이트
+      await loadPDSPlans();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
 }
 
 

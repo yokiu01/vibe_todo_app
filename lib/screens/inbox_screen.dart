@@ -55,7 +55,7 @@ class _InboxScreenState extends State<InboxScreen> {
     }
   }
 
-  /// Notion에서 수집 탭용 할일 로드
+  /// Notion에서 수집 탭용 할일 로드 (최근 추가된 항목들)
   Future<void> _loadNotionTasks() async {
     if (!_isNotionAuthenticated) return;
     
@@ -64,7 +64,33 @@ class _InboxScreenState extends State<InboxScreen> {
     });
 
     try {
-      final items = await _authService.apiService!.getInboxTasks();
+      // 최근 7일간 추가된 항목들을 가져오기
+      final now = DateTime.now();
+      final sevenDaysAgo = now.subtract(const Duration(days: 7));
+      
+      final filter = <String, dynamic>{
+        'and': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'property': '완료',
+            'checkbox': <String, dynamic>{
+              'equals': false,
+            }
+          }
+        ]
+      };
+      
+      final items = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
+        filter
+      );
+      
+      // 생성일시 기준으로 최신순 정렬
+      items.sort((a, b) {
+        final aCreated = DateTime.tryParse(a['created_time'] ?? '') ?? DateTime(1970);
+        final bCreated = DateTime.tryParse(b['created_time'] ?? '') ?? DateTime(1970);
+        return bCreated.compareTo(aCreated);
+      });
+      
       final notionTasks = items.map((item) => NotionTask.fromNotion(item)).toList();
       
       setState(() {
@@ -132,12 +158,18 @@ class _InboxScreenState extends State<InboxScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildInputSection(),
-            _buildRecentItems(),
-          ],
+        child: RefreshIndicator(
+          onRefresh: _loadNotionTasks,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildHeader(),
+                _buildInputSection(),
+                _buildRecentItems(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -252,7 +284,8 @@ class _InboxScreenState extends State<InboxScreen> {
 
 
   Widget _buildRecentItems() {
-    return Expanded(
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.6, // 화면 높이의 60%로 고정
       child: _isLoadingNotion
           ? const Center(
               child: CircularProgressIndicator(),
@@ -294,7 +327,7 @@ class _InboxScreenState extends State<InboxScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        '📋 최근 추가 항목',
+                        '📋 최근 수집한 내용',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,

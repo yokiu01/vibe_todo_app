@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/notion_auth_service.dart';
 import '../models/notion_task.dart';
+import 'settings_screen.dart';
 
 class ArchiveScreen extends StatefulWidget {
   const ArchiveScreen({Key? key}) : super(key: key);
@@ -9,29 +10,43 @@ class ArchiveScreen extends StatefulWidget {
   State<ArchiveScreen> createState() => _ArchiveScreenState();
 }
 
-class _ArchiveScreenState extends State<ArchiveScreen> {
+class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateMixin {
   final NotionAuthService _authService = NotionAuthService();
-  
+
   List<NotionTask> _archivedItems = [];
   bool _isLoading = false;
   bool _isAuthenticated = false;
-  String _selectedCategory = '전체';
+  late TabController _tabController;
+  String _selectedCategory = '목표 나침반';
 
-  final List<String> _categories = [
-    '전체',
-    '완료된 할일',
-    '보관된 메모',
-    '아이디어',
-    '읽을거리',
-    '취미',
-    '언젠가',
+  final List<Tab> _tabs = [
+    const Tab(text: '목표 나침반', icon: Icon(Icons.explore, size: 18)),
+    const Tab(text: '노트 관리함', icon: Icon(Icons.folder, size: 18)),
+    const Tab(text: '아이스박스', icon: Icon(Icons.ac_unit, size: 18)),
   ];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _checkAuthentication();
     _loadArchivedItems();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) {
+      setState(() {
+        _selectedCategory = _tabs[_tabController.index].text!;
+      });
+      _loadArchivedItems();
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
@@ -66,11 +81,11 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
       switch (_selectedCategory) {
         case '완료된 할일':
           items = await _authService.apiService!.queryDatabase(
-            '1169f5e4a81180a6a193e6747204dc8e',
+            '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
             <String, dynamic>{
-              'property': 'status',
-              'select': <String, dynamic>{
-                'equals': '완료',
+              'property': '완료',
+              'checkbox': <String, dynamic>{
+                'equals': true,
               }
             },
           );
@@ -85,9 +100,9 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
           break;
         case '언젠가':
           items = await _authService.apiService!.queryDatabase(
-            '1169f5e4a81180a6a193e6747204dc8e',
+            '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
             <String, dynamic>{
-              'property': 'clarification',
+              'property': '명료화',
               'select': <String, dynamic>{
                 'equals': '언젠가',
               }
@@ -98,10 +113,10 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
         default:
           // 모든 데이터베이스에서 데이터 가져오기
           final allItems = await Future.wait([
-            _authService.apiService!.queryDatabase('1169f5e4a81180a6a193e6747204dc8e', null),
-            _authService.apiService!.queryDatabase('1159f5e4a81180e3a9f2fdf6634730e6', null),
-            _authService.apiService!.queryDatabase('1159f5e4a81180019f29cdd24d369230', null),
-            _authService.apiService!.queryDatabase('1159f5e4a81180d092add53ae9df7f05', null),
+            _authService.apiService!.queryDatabase('1159f5e4a81180e591cbc596ae52f611', null), // TODO_DB_ID
+            _authService.apiService!.queryDatabase('1159f5e4a81180e3a9f2fdf6634730e6', null), // MEMO_DB_ID
+            _authService.apiService!.queryDatabase('1159f5e4a81180019f29cdd24d369230', null), // PROJECT_DB_ID
+            _authService.apiService!.queryDatabase('1159f5e4a81180d092add53ae9df7f05', null), // GOAL_DB_ID
           ]);
           items = allItems.expand((list) => list).toList();
           break;
@@ -287,26 +302,32 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('아카이브'),
+        title: const Text('📦 아카이브'),
         actions: [
-          if (_isAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _logoutFromNotion,
-              tooltip: 'Notion 로그아웃',
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.login),
-              onPressed: _showApiKeyDialog,
-              tooltip: 'Notion API 키 입력',
-            ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: '설정',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _isAuthenticated ? _loadArchivedItems : null,
             tooltip: '새로고침',
           ),
         ],
+        bottom: _isAuthenticated ? TabBar(
+          controller: _tabController,
+          tabs: _tabs,
+          labelColor: const Color(0xFF2563EB),
+          unselectedLabelColor: const Color(0xFF64748B),
+          indicatorColor: const Color(0xFF2563EB),
+        ) : null,
       ),
       body: _buildBody(),
     );
@@ -314,74 +335,54 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
 
   Widget _buildBody() {
     if (!_isAuthenticated) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.login,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Notion API 키를 입력하면\n아카이브를 볼 수 있습니다.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
+      return RefreshIndicator(
+        onRefresh: _checkAuthentication,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            height: MediaQuery.of(context).size.height - 200,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.login,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Notion API 키를 입력하면\n아카이브를 볼 수 있습니다.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _showApiKeyDialog,
+                    icon: const Icon(Icons.key),
+                    label: const Text('API 키 입력'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _showApiKeyDialog,
-              icon: const Icon(Icons.key),
-              label: const Text('API 키 입력'),
-            ),
-          ],
+          ),
         ),
       );
     }
 
-    return Column(
-      children: [
-        // 카테고리 선택
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _categories.length,
-            itemBuilder: (context, index) {
-              final category = _categories[index];
-              final isSelected = _selectedCategory == category;
-              
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(category),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      _selectedCategory = category;
-                    });
-                    _loadArchivedItems();
-                  },
-                  selectedColor: Colors.blue.withOpacity(0.2),
-                  checkmarkColor: Colors.blue,
-                ),
-              );
-            },
-          ),
-        ),
-        
-        const Divider(),
-        
-        // 아카이브 항목 목록
-        Expanded(
-          child: _buildArchivedItemsList(),
-        ),
-      ],
+    return RefreshIndicator(
+      onRefresh: _loadArchivedItems,
+      child: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildGoalCompassTab(),
+          _buildNoteManagerTab(),
+          _buildIceBoxTab(),
+        ],
+      ),
     );
   }
 
@@ -642,6 +643,233 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
             ),
             child: const Text('삭제', style: TextStyle(color: Colors.white)),
           ),
+        ],
+      ),
+    );
+  }
+
+  // New tab builder methods
+  Widget _buildGoalCompassTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionCard(
+            title: '🎯 진행 중인 목표',
+            subtitle: '현재 작업 중인 목표들',
+            items: [], // TODO: 실제 데이터 연결
+            emptyMessage: '진행 중인 목표가 없습니다.',
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            title: '💼 진행 중인 프로젝트',
+            subtitle: '현재 작업 중인 프로젝트들',
+            items: [], // TODO: 실제 데이터 연결
+            emptyMessage: '진행 중인 프로젝트가 없습니다.',
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            title: '✅ 완료된 목표',
+            subtitle: '달성한 목표들',
+            items: [], // TODO: 실제 데이터 연결
+            emptyMessage: '완료된 목표가 없습니다.',
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            title: '📁 완료된 프로젝트',
+            subtitle: '완료한 프로젝트들',
+            items: [], // TODO: 실제 데이터 연결
+            emptyMessage: '완료된 프로젝트가 없습니다.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteManagerTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionCard(
+            title: '👀 나중에 보기',
+            subtitle: '나중에 확인할 노트들',
+            items: [], // TODO: 실제 데이터 연결
+            emptyMessage: '나중에 볼 노트가 없습니다.',
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            title: '🔧 중간 작업물',
+            subtitle: '진행 중인 작업 노트들',
+            items: [], // TODO: 실제 데이터 연결
+            emptyMessage: '중간 작업물이 없습니다.',
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            title: '📚 영역·자원',
+            subtitle: '관리 영역과 참고 자원들',
+            items: [], // TODO: 실제 데이터 연결
+            emptyMessage: '영역·자원이 없습니다.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIceBoxTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionCard(
+            title: '🧊 차가운 다음행동',
+            subtitle: '1주일 이상 된 다음행동들',
+            items: [], // TODO: 실제 데이터 연결 (1주일 이전 다음행동)
+            emptyMessage: '차가운 다음행동이 없습니다.',
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            title: '⏰ 언젠가',
+            subtitle: '나중에 할 일들',
+            items: [], // TODO: 실제 데이터 연결 (언젠가 명료화)
+            emptyMessage: '언젠가 할 일이 없습니다.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required String subtitle,
+    required List<NotionTask> items,
+    required String emptyMessage,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${items.length}개',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF3B82F6),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.inbox_outlined,
+                      size: 48,
+                      color: const Color(0xFFE5E7EB),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      emptyMessage,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: items.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return ListTile(
+                  title: Text(
+                    item.title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: item.description?.isNotEmpty == true
+                      ? Text(
+                          item.description!,
+                          style: const TextStyle(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
+                  leading: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _getCategoryColor(item.clarification),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  onTap: () => _showItemDetails(item),
+                );
+              },
+            ),
         ],
       ),
     );

@@ -17,15 +17,32 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
   DateTime _selectedDate = DateTime.now();
   Map<String, String> _actualActivities = {};
   String _seeNotes = '';
+  Map<String, TextEditingController> _activityControllers = {};
+  TextEditingController _seeNotesController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _initializeControllers();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PDSDiaryProvider>().loadPDSPlans();
       context.read<ItemProvider>().loadItems();
       _loadCurrentPlan();
     });
+  }
+
+  @override
+  void dispose() {
+    _activityControllers.values.forEach((controller) => controller.dispose());
+    _seeNotesController.dispose();
+    super.dispose();
+  }
+
+  void _initializeControllers() {
+    final timeSlots = PDSPlan.generateTimeSlots();
+    for (final slot in timeSlots) {
+      _activityControllers[slot.key] = TextEditingController();
+    }
   }
 
   @override
@@ -39,12 +56,61 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
   void _loadCurrentPlan() {
     final pdsProvider = context.read<PDSDiaryProvider>();
     final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
-    
+
     if (currentPlan != null) {
       setState(() {
         _actualActivities = currentPlan.actualActivities ?? {};
         _seeNotes = currentPlan.seeNotes ?? '';
       });
+
+      // Update controllers with loaded data
+      _actualActivities.forEach((key, value) {
+        if (_activityControllers.containsKey(key)) {
+          _activityControllers[key]!.text = value;
+        }
+      });
+      _seeNotesController.text = _seeNotes;
+    } else {
+      // Clear controllers for new date
+      _activityControllers.values.forEach((controller) => controller.clear());
+      _seeNotesController.clear();
+      setState(() {
+        _actualActivities = {};
+        _seeNotes = '';
+      });
+    }
+  }
+
+  Future<void> _showDatePicker() async {
+    final DateTime? selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('ko', 'KR'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF2563EB),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF1E293B),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedDate != null && selectedDate != _selectedDate) {
+      setState(() {
+        _selectedDate = selectedDate;
+      });
+      // 날짜가 변경되면 해당 날짜의 데이터 로드
+      context.read<PDSDiaryProvider>().loadPDSPlans();
+      context.read<ItemProvider>().loadItems();
+      _loadCurrentPlan();
     }
   }
 
@@ -63,13 +129,23 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: _buildDoSeeLayout(),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            context.read<PDSDiaryProvider>().loadPDSPlans();
+            context.read<ItemProvider>().loadItems();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildHeader(),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height - 200,
+                  child: _buildDoSeeLayout(),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -94,12 +170,35 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
               color: Color(0xFF1E293B),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF64748B),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _showDatePicker,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF374151),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 18,
+                    color: Color(0xFF2563EB),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -287,13 +386,25 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
       height: 60,
       margin: const EdgeInsets.only(bottom: 2),
       child: TextField(
-        decoration: const InputDecoration(
+        controller: _activityControllers[slot.key],
+        decoration: InputDecoration(
           hintText: '실제로 한 일',
           border: OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFFE2E8F0)),
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
-          contentPadding: EdgeInsets.all(8),
-          hintStyle: TextStyle(fontSize: 11),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFF2563EB)),
+          ),
+          contentPadding: const EdgeInsets.all(8),
+          hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+          filled: true,
+          fillColor: Colors.white,
         ),
         style: const TextStyle(fontSize: 12),
         maxLines: 2,
@@ -303,9 +414,6 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
           });
           _saveActualActivity(slot.key, value);
         },
-        controller: TextEditingController(
-          text: _actualActivities[slot.key] ?? '',
-        ),
       ),
     );
   }
@@ -316,22 +424,47 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '📝 SEE (오늘의 회고)',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF374151),
-            ),
+          Row(
+            children: [
+              const Text(
+                '📝 SEE (오늘의 회고)',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF374151),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                DateFormat('HH:mm').format(DateTime.now()),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           TextField(
-            decoration: const InputDecoration(
+            controller: _seeNotesController,
+            decoration: InputDecoration(
               hintText: '오늘 하루를 돌아보며 느낀 점, 배운 점, 개선할 점 등을 자유롭게 적어보세요...',
               border: OutlineInputBorder(
-                borderSide: BorderSide(color: Color(0xFFE2E8F0)),
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
               ),
-              contentPadding: EdgeInsets.all(16),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFF2563EB)),
+              ),
+              contentPadding: const EdgeInsets.all(16),
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+              filled: true,
+              fillColor: Colors.white,
             ),
             style: const TextStyle(fontSize: 14),
             maxLines: 6,
@@ -341,7 +474,6 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
               });
               _saveSeeNotes(value);
             },
-            controller: TextEditingController(text: _seeNotes),
           ),
         ],
       ),
