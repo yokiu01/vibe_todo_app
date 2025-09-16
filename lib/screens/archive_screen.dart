@@ -164,16 +164,53 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
       final items = allItems.expand((list) => list).toList();
       print('목표 나침반: 총 ${items.length}개 항목 로드됨');
 
+      // 첫 번째 항목의 구조 확인
+      if (items.isNotEmpty) {
+        print('🔍 목표 나침반 첫 번째 항목 구조:');
+        print('  - 전체 데이터: ${items[0]}');
+        print('  - properties: ${items[0]['properties']}');
+        
+        final properties = items[0]['properties'] as Map<String, dynamic>? ?? {};
+        print('  - properties 키들: ${properties.keys.toList()}');
+        
+        if (properties.containsKey('상태')) {
+          final statusProperty = properties['상태'] as Map<String, dynamic>? ?? {};
+          print('  - 상태 속성: $statusProperty');
+          print('  - 상태 속성 키들: ${statusProperty.keys.toList()}');
+          
+          if (statusProperty.containsKey('status')) {
+            final statusValue = statusProperty['status'] as Map<String, dynamic>? ?? {};
+            print('  - status 값: $statusValue');
+            print('  - status 키들: ${statusValue.keys.toList()}');
+            
+            if (statusValue.containsKey('name')) {
+              final statusName = statusValue['name'] as String? ?? '';
+              print('  - 실제 상태명: "$statusName"');
+            }
+          }
+        }
+      }
+
       final notionTasks = items.map((item) {
         try {
-          return NotionTask.fromNotion(item);
+          final task = NotionTask.fromNotion(item);
+          print('목표 나침반 변환 성공: ${task.title} - 상태: ${task.status} - 명료화: ${task.clarification}');
+          return task;
         } catch (e) {
           print('목표 나침반 NotionTask 변환 오류: $e');
+          print('  - 문제가 된 데이터: $item');
           return null;
         }
       }).where((task) => task != null).cast<NotionTask>().toList();
 
       print('목표 나침반: ${notionTasks.length}개 NotionTask 생성됨');
+      
+      // 상태별 분류 확인
+      final inProgressGoals = notionTasks.where((task) => task.status == '진행 중').toList();
+      final completedGoals = notionTasks.where((task) => task.status == '완료').toList();
+      print('📊 목표 나침반 분류:');
+      print('  - 진행 중: ${inProgressGoals.length}개');
+      print('  - 완료: ${completedGoals.length}개');
 
       if (mounted) {
         setState(() {
@@ -225,16 +262,55 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
       final items = allItems.expand((list) => list).toList();
       print('노트 관리함: 총 ${items.length}개 항목 로드됨');
 
+      // 첫 번째 항목의 구조 확인
+      if (items.isNotEmpty) {
+        print('🔍 노트 관리함 첫 번째 항목 구조:');
+        print('  - 전체 데이터: ${items[0]}');
+        print('  - properties: ${items[0]['properties']}');
+        
+        final properties = items[0]['properties'] as Map<String, dynamic>? ?? {};
+        print('  - properties 키들: ${properties.keys.toList()}');
+        
+        if (properties.containsKey('분류')) {
+          final categoryProperty = properties['분류'] as Map<String, dynamic>? ?? {};
+          print('  - 분류 속성: $categoryProperty');
+          print('  - 분류 속성 키들: ${categoryProperty.keys.toList()}');
+          
+          if (categoryProperty.containsKey('select')) {
+            final selectValue = categoryProperty['select'] as Map<String, dynamic>? ?? {};
+            print('  - select 값: $selectValue');
+            print('  - select 키들: ${selectValue.keys.toList()}');
+            
+            if (selectValue.containsKey('name')) {
+              final categoryName = selectValue['name'] as String? ?? '';
+              print('  - 실제 분류명: "$categoryName"');
+            }
+          }
+        }
+      }
+
       final notionTasks = items.map((item) {
         try {
-          return NotionTask.fromNotion(item);
+          final task = NotionTask.fromNotion(item);
+          print('노트 관리함 변환 성공: ${task.title} - 상태: ${task.status} - 명료화: ${task.clarification}');
+          return task;
         } catch (e) {
           print('노트 관리함 NotionTask 변환 오류: $e');
+          print('  - 문제가 된 데이터: $item');
           return null;
         }
       }).where((task) => task != null).cast<NotionTask>().toList();
 
       print('노트 관리함: ${notionTasks.length}개 NotionTask 생성됨');
+      
+      // 분류별 분류 확인
+      final laterView = notionTasks.where((task) => task.clarification == '나중에 보기').toList();
+      final workInProgress = notionTasks.where((task) => task.clarification == '중간 작업물').toList();
+      final areaResource = notionTasks.where((task) => task.status == '영역' || task.status == '자원').toList();
+      print('📊 노트 관리함 분류:');
+      print('  - 나중에 보기: ${laterView.length}개');
+      print('  - 중간 작업물: ${workInProgress.length}개');
+      print('  - 영역·자원: ${areaResource.length}개');
 
       if (mounted) {
         setState(() {
@@ -284,21 +360,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
     }
   }
 
-  /// 항목 복원
-  Future<void> _restoreItem(NotionTask item) async {
-    try {
-      // 항목을 TODO 데이터베이스로 이동
-      await _authService.apiService!.createTodo(item.title, description: item.description);
-      
-      // 원본 항목 삭제
-      await _authService.apiService!.deletePage(item.id);
-      
-      _loadArchivedItems(); // 목록 새로고침
-      _showSuccessSnackBar('항목이 복원되었습니다.');
-    } catch (e) {
-      _showErrorSnackBar('복원에 실패했습니다: $e');
-    }
-  }
 
   /// 항목 완전 삭제
   Future<void> _deleteItem(NotionTask item) async {
@@ -657,25 +718,12 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
             switch (value) {
-              case 'restore':
-                _restoreItem(item);
-                break;
               case 'delete':
                 _showDeleteConfirmDialog(item);
                 break;
             }
           },
           itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'restore',
-              child: Row(
-                children: [
-                  Icon(Icons.restore, size: 20),
-                  SizedBox(width: 8),
-                  Text('복원'),
-                ],
-              ),
-            ),
             const PopupMenuItem(
               value: 'delete',
               child: Row(
@@ -753,47 +801,29 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
   void _showItemDetails(NotionTask item) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(item.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (item.description != null && item.description!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(item.description!),
-              ),
-            if (item.clarification != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    const Text('분류: '),
-                    Chip(
-                      label: Text(item.clarification!),
-                      backgroundColor: _getCategoryColor(item.clarification),
-                      labelStyle: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            Text('보관일: ${_formatDate(item.createdAt)}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('닫기'),
+      useSafeArea: true,
+      builder: (context) => Dialog.fullscreen(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF8FAFC),
+                Color(0xFFE2E8F0),
+              ],
+            ),
           ),
-          ElevatedButton(
-            onPressed: () {
+          child: _ArchiveItemDetailView(
+            task: item,
+            authService: _authService,
+            onUpdate: () {
               Navigator.of(context).pop();
-              _restoreItem(item);
+              _loadArchivedItems(); // 새로고침
             },
-            child: const Text('복원'),
+            onClose: () => Navigator.of(context).pop(),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -839,13 +869,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '🎯 진행 중인 목표',
               subtitle: '현재 작업 중인 목표들',
               items: _archivedItems.where((item) =>
-                (item.clarification?.contains('목표') == true ||
-                 item.status?.contains('목표') == true ||
-                 item.status == '목표') &&
-                (item.status?.contains('진행') == true ||
-                 item.status == '진행중' ||
-                 item.clarification?.contains('진행') == true ||
-                 !item.isCompleted)
+                item.status == '진행 중'
               ).toList(),
               emptyMessage: '진행 중인 목표가 없습니다.',
             ),
@@ -854,13 +878,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '💼 진행 중인 프로젝트',
               subtitle: '현재 작업 중인 프로젝트들',
               items: _archivedItems.where((item) =>
-                (item.clarification?.contains('프로젝트') == true ||
-                 item.status?.contains('프로젝트') == true ||
-                 item.status == '프로젝트') &&
-                (item.status?.contains('진행') == true ||
-                 item.status == '진행중' ||
-                 item.clarification?.contains('진행') == true ||
-                 !item.isCompleted)
+                item.status == '진행 중'
               ).toList(),
               emptyMessage: '진행 중인 프로젝트가 없습니다.',
             ),
@@ -869,12 +887,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '✅ 완료된 목표',
               subtitle: '달성한 목표들',
               items: _archivedItems.where((item) =>
-                (item.clarification?.contains('목표') == true ||
-                 item.status?.contains('목표') == true ||
-                 item.status == '목표') &&
-                (item.status?.contains('완료') == true ||
-                 item.status == '완료' ||
-                 item.isCompleted)
+                item.status == '완료'
               ).toList(),
               emptyMessage: '완료된 목표가 없습니다.',
             ),
@@ -883,12 +896,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '📁 완료된 프로젝트',
               subtitle: '완료한 프로젝트들',
               items: _archivedItems.where((item) =>
-                (item.clarification?.contains('프로젝트') == true ||
-                 item.status?.contains('프로젝트') == true ||
-                 item.status == '프로젝트') &&
-                (item.status?.contains('완료') == true ||
-                 item.status == '완료' ||
-                 item.isCompleted)
+                item.status == '완료'
               ).toList(),
               emptyMessage: '완료된 프로젝트가 없습니다.',
             ),
@@ -911,10 +919,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '👀 나중에 보기',
               subtitle: '나중에 확인할 노트들',
               items: _archivedItems.where((item) =>
-                item.clarification?.contains('나중에') == true ||
-                item.status?.contains('나중에') == true ||
-                item.clarification == '나중에 보기' ||
-                item.clarification == '나중에'
+                item.clarification == '나중에 보기'
               ).toList(),
               emptyMessage: '나중에 볼 노트가 없습니다.',
             ),
@@ -923,12 +928,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '🔧 중간 작업물',
               subtitle: '진행 중인 작업 노트들',
               items: _archivedItems.where((item) =>
-                item.clarification?.contains('중간') == true ||
-                item.clarification?.contains('작업물') == true ||
-                item.status?.contains('진행') == true ||
-                item.clarification == '중간 작업물' ||
-                item.clarification?.contains('진행') == true ||
-                (item.status == '진행중' && !item.isCompleted)
+                item.clarification == '중간 작업물'
               ).toList(),
               emptyMessage: '중간 작업물이 없습니다.',
             ),
@@ -938,15 +938,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               subtitle: '관리 영역과 참고 자원들',
               items: _archivedItems.where((item) =>
                 item.status == '영역' ||
-                item.status == '자원' ||
-                item.clarification?.contains('영역') == true ||
-                item.clarification?.contains('자원') == true ||
-                item.status?.contains('영역') == true ||
-                item.status?.contains('자원') == true ||
-                item.clarification == '영역' ||
-                item.clarification == '자원' ||
-                item.clarification?.contains('참고') == true ||
-                item.clarification?.contains('노트') == true
+                item.status == '자원'
               ).toList(),
               emptyMessage: '영역·자원이 없습니다.',
             ),
@@ -971,9 +963,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '🧊 차가운 다음행동',
               subtitle: '1주일 이상 된 다음행동들',
               items: _archivedItems.where((item) =>
-                (item.clarification == '다음행동' ||
-                 item.clarification?.contains('다음') == true ||
-                 item.status?.contains('다음') == true) &&
+                item.clarification == '다음행동' &&
                 !item.isCompleted &&
                 item.createdAt.isBefore(oneWeekAgo)
               ).toList(),
@@ -984,10 +974,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               title: '⏰ 언젠가',
               subtitle: '나중에 할 일들',
               items: _archivedItems.where((item) =>
-                (item.clarification == '언젠가' ||
-                 item.clarification?.contains('언젠가') == true ||
-                 item.status?.contains('언젠가') == true ||
-                 item.status == '언젠가') &&
+                item.clarification == '언젠가' &&
                 !item.isCompleted
               ).toList(),
               emptyMessage: '언젠가 할 일이 없습니다.',
@@ -1128,6 +1115,508 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 아카이브 항목 상세보기 및 편집 위젯
+class _ArchiveItemDetailView extends StatefulWidget {
+  final NotionTask task;
+  final NotionAuthService authService;
+  final VoidCallback onUpdate;
+  final VoidCallback onClose;
+
+  const _ArchiveItemDetailView({
+    required this.task,
+    required this.authService,
+    required this.onUpdate,
+    required this.onClose,
+  });
+
+  @override
+  State<_ArchiveItemDetailView> createState() => _ArchiveItemDetailViewState();
+}
+
+class _ArchiveItemDetailViewState extends State<_ArchiveItemDetailView> {
+  List<Map<String, dynamic>> _blocks = [];
+  bool _isLoading = true;
+  bool _isAddingContent = false;
+  bool _isEditing = false;
+  final TextEditingController _newContentController = TextEditingController();
+
+  // Editing controllers
+  late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
+  DateTime? _selectedDate;
+  String? _selectedClarification;
+  String? _selectedStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeEditingFields();
+    _loadPageContent();
+  }
+
+  void _initializeEditingFields() {
+    _titleController = TextEditingController(text: widget.task.title);
+    _descriptionController = TextEditingController(text: widget.task.description ?? '');
+    _selectedDate = widget.task.dueDate;
+    _selectedClarification = widget.task.clarification;
+    _selectedStatus = widget.task.status;
+  }
+
+  @override
+  void dispose() {
+    _newContentController.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPageContent() async {
+    try {
+      final blocks = await widget.authService.apiService!.getBlockChildren(widget.task.id);
+      setState(() {
+        _blocks = blocks;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('페이지 내용 로드 실패: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('페이지 내용 로드 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _addNewContent() async {
+    if (_newContentController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isAddingContent = true;
+    });
+
+    try {
+      final newBlock = widget.authService.apiService!.createParagraphBlock(_newContentController.text.trim());
+      await widget.authService.apiService!.appendBlockChildren(widget.task.id, [newBlock]);
+
+      _newContentController.clear();
+      await _loadPageContent(); // 새로고침
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('내용이 추가되었습니다'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('내용 추가 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isAddingContent = false;
+      });
+    }
+  }
+
+  Future<void> _saveTaskChanges() async {
+    setState(() {
+      _isAddingContent = true; // Reuse loading state
+    });
+
+    try {
+      // Update page properties through Notion API
+      final properties = <String, dynamic>{};
+      
+      // Update title
+      if (_titleController.text.trim() != widget.task.title) {
+        properties['이름'] = {
+          'title': [
+            {
+              'text': {
+                'content': _titleController.text.trim(),
+              }
+            }
+          ]
+        };
+      }
+
+      // Update description
+      if (_descriptionController.text.trim() != (widget.task.description ?? '')) {
+        properties['description'] = {
+          'rich_text': [
+            {
+              'text': {
+                'content': _descriptionController.text.trim(),
+              }
+            }
+          ]
+        };
+      }
+
+      // Update due date
+      if (_selectedDate != widget.task.dueDate) {
+        if (_selectedDate != null) {
+          properties['날짜'] = {
+            'date': {
+              'start': _selectedDate!.toIso8601String().split('T')[0],
+            }
+          };
+        } else {
+          properties['날짜'] = {
+            'date': null,
+          };
+        }
+      }
+
+      // Update clarification
+      if (_selectedClarification != widget.task.clarification) {
+        if (_selectedClarification != null && _selectedClarification!.isNotEmpty) {
+          properties['명료화'] = {
+            'select': {
+              'name': _selectedClarification!,
+            }
+          };
+        } else {
+          properties['명료화'] = {
+            'select': null,
+          };
+        }
+      }
+
+      // Update status
+      if (_selectedStatus != widget.task.status) {
+        if (_selectedStatus != null && _selectedStatus!.isNotEmpty) {
+          properties['상태'] = {
+            'status': {
+              'name': _selectedStatus!,
+            }
+          };
+        } else {
+          properties['상태'] = {
+            'status': null,
+          };
+        }
+      }
+
+      // Only update if there are changes
+      if (properties.isNotEmpty) {
+        await widget.authService.apiService!.updatePage(widget.task.id, properties);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('변경사항이 저장되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        widget.onUpdate(); // Refresh parent
+      }
+
+      setState(() {
+        _isEditing = false;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('저장 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isAddingContent = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: widget.onClose,
+          icon: const Icon(Icons.close, color: Colors.black87),
+        ),
+        title: _isEditing 
+          ? TextField(
+              controller: _titleController,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: '제목을 입력하세요',
+              ),
+            )
+          : Text(
+              widget.task.title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+        actions: [
+          if (_isEditing) ...[
+            IconButton(
+              onPressed: _saveTaskChanges,
+              icon: const Icon(Icons.check, color: Colors.green),
+            ),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _isEditing = false;
+                  _initializeEditingFields(); // Reset to original values
+                });
+              },
+              icon: const Icon(Icons.close, color: Colors.red),
+            ),
+          ] else ...[
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _isEditing = true;
+                });
+              },
+              icon: const Icon(Icons.edit, color: Colors.blue),
+            ),
+          ],
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Task properties
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_isEditing) ...[
+                            // Description field
+                            TextField(
+                              controller: _descriptionController,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                labelText: '설명',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Due date field
+                            Row(
+                              children: [
+                                const Text('기한: '),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final date = await showDatePicker(
+                                        context: context,
+                                        initialDate: _selectedDate ?? DateTime.now(),
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2030),
+                                      );
+                                      if (date != null) {
+                                        setState(() {
+                                          _selectedDate = date;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.grey),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        _selectedDate != null
+                                            ? '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
+                                            : '날짜 선택',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (_selectedDate != null)
+                                  IconButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedDate = null;
+                                      });
+                                    },
+                                    icon: const Icon(Icons.clear),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Clarification dropdown
+                            DropdownButtonFormField<String>(
+                              value: _selectedClarification,
+                              decoration: const InputDecoration(
+                                labelText: '명료화',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: '다음행동', child: Text('다음행동')),
+                                DropdownMenuItem(value: '언젠가', child: Text('언젠가')),
+                                DropdownMenuItem(value: '나중에 보기', child: Text('나중에 보기')),
+                                DropdownMenuItem(value: '중간 작업물', child: Text('중간 작업물')),
+                                DropdownMenuItem(value: '레퍼런스', child: Text('레퍼런스')),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedClarification = value;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Status dropdown
+                            DropdownButtonFormField<String>(
+                              value: _selectedStatus,
+                              decoration: const InputDecoration(
+                                labelText: '상태',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: '진행 중', child: Text('진행 중')),
+                                DropdownMenuItem(value: '완료', child: Text('완료')),
+                                DropdownMenuItem(value: '영역', child: Text('영역')),
+                                DropdownMenuItem(value: '자원', child: Text('자원')),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedStatus = value;
+                                });
+                              },
+                            ),
+                          ] else ...[
+                            // Display mode
+                            if (widget.task.description != null && widget.task.description!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  widget.task.description!,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ),
+                            if (widget.task.clarification != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  children: [
+                                    const Text('명료화: '),
+                                    Chip(
+                                      label: Text(widget.task.clarification!),
+                                      backgroundColor: Colors.blue,
+                                      labelStyle: const TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (widget.task.status != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  children: [
+                                    const Text('상태: '),
+                                    Chip(
+                                      label: Text(widget.task.status!),
+                                      backgroundColor: Colors.green,
+                                      labelStyle: const TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (widget.task.dueDate != null)
+                              Text('기한: ${widget.task.dueDate!.year}-${widget.task.dueDate!.month.toString().padLeft(2, '0')}-${widget.task.dueDate!.day.toString().padLeft(2, '0')}'),
+                            Text('생성일: ${widget.task.createdAt.year}-${widget.task.createdAt.month.toString().padLeft(2, '0')}-${widget.task.createdAt.day.toString().padLeft(2, '0')}'),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Page content
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                '페이지 내용',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                onPressed: _addNewContent,
+                                icon: const Icon(Icons.add),
+                                tooltip: '내용 추가',
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _newContentController,
+                            decoration: const InputDecoration(
+                              hintText: '새로운 내용을 입력하세요...',
+                              border: OutlineInputBorder(),
+                              suffixIcon: Icon(Icons.send),
+                            ),
+                            onSubmitted: (_) => _addNewContent(),
+                          ),
+                          const SizedBox(height: 16),
+                          if (_isLoading)
+                            const Center(child: CircularProgressIndicator())
+                          else if (_blocks.isEmpty)
+                            const Text(
+                              '아직 내용이 없습니다. 위에서 내용을 추가해보세요.',
+                              style: TextStyle(color: Colors.grey),
+                            )
+                          else
+                            ...(_blocks.map((block) {
+                              if (block['type'] == 'paragraph' && block['paragraph'] != null) {
+                                final paragraph = block['paragraph'] as Map<String, dynamic>;
+                                final richText = paragraph['rich_text'] as List<dynamic>? ?? [];
+                                if (richText.isNotEmpty) {
+                                  final text = richText.first['text']['content'] as String? ?? '';
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text(text),
+                                  );
+                                }
+                              }
+                              return const SizedBox.shrink();
+                            })),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

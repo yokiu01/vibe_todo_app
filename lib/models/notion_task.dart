@@ -104,13 +104,19 @@ class NotionTask {
       print('기한 추출 오류: $e');
     }
     
-    // 명료화 추출 (safe parsing)
+    // 명료화 추출 (safe parsing) - 여러 가능한 속성명 시도
     String? clarification;
     try {
-      final clarificationProperty = properties['명료화'];
-      if (clarificationProperty is Map && clarificationProperty['select'] is Map) {
-        final selectObj = clarificationProperty['select'] as Map;
-        clarification = selectObj['name']?.toString();
+      // 명료화, 분류 등 여러 속성명 시도
+      for (String key in ['명료화', '분류']) {
+        if (properties[key] != null) {
+          final clarificationProperty = properties[key];
+          if (clarificationProperty is Map && clarificationProperty['select'] is Map) {
+            final selectObj = clarificationProperty['select'] as Map;
+            clarification = selectObj['name']?.toString();
+            if (clarification != null && clarification.isNotEmpty) break;
+          }
+        }
       }
     } catch (e) {
       print('명료화 추출 오류: $e');
@@ -123,10 +129,19 @@ class NotionTask {
       for (String key in ['status', '상태', '명료화']) {
         if (properties[key] != null) {
           final statusProperty = properties[key];
-          if (statusProperty is Map && statusProperty['select'] is Map) {
-            final selectObj = statusProperty['select'] as Map;
-            status = selectObj['name']?.toString();
-            if (status != null && status.isNotEmpty) break;
+          if (statusProperty is Map) {
+            // select 속성 시도
+            if (statusProperty['select'] is Map) {
+              final selectObj = statusProperty['select'] as Map;
+              status = selectObj['name']?.toString();
+              if (status != null && status.isNotEmpty) break;
+            }
+            // status 속성 시도 (Notion status 타입)
+            if (statusProperty['status'] is Map) {
+              final statusObj = statusProperty['status'] as Map;
+              status = statusObj['name']?.toString();
+              if (status != null && status.isNotEmpty) break;
+            }
           }
         }
       }

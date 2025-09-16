@@ -104,27 +104,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final activeProjects = projectsData.map((data) => NotionTask.fromNotion(data)).toList();
 
       // 영역·자원 데이터베이스에서 직접 데이터 가져오기
+      print('🔍 영역·자원 데이터베이스 로딩 시작...');
       final areaResourceData = await _authService.apiService!.queryDatabase(
         '1159f5e4a81180d1ab17fa79bb0cf0f4', // 영역·자원 데이터베이스 ID
         null
       );
+      print('📊 영역·자원 데이터베이스 응답: ${areaResourceData.length}개 항목');
+      
+      // 첫 번째 항목의 구조 확인
+      if (areaResourceData.isNotEmpty) {
+        print('🔍 첫 번째 항목 구조:');
+        print('  - 전체 데이터: ${areaResourceData[0]}');
+        print('  - properties: ${areaResourceData[0]['properties']}');
+        
+        final properties = areaResourceData[0]['properties'] as Map<String, dynamic>? ?? {};
+        print('  - properties 키들: ${properties.keys.toList()}');
+        
+        // '상태' 속성이 있는지 확인
+        if (properties.containsKey('상태')) {
+          final typeProperty = properties['상태'] as Map<String, dynamic>? ?? {};
+          print('  - 상태 속성: $typeProperty');
+          print('  - 상태 속성 키들: ${typeProperty.keys.toList()}');
+          
+          if (typeProperty.containsKey('status')) {
+            final statusValue = typeProperty['status'] as Map<String, dynamic>? ?? {};
+            print('  - status 값: $statusValue');
+            print('  - status 키들: ${statusValue.keys.toList()}');
+            
+            if (statusValue.containsKey('name')) {
+              final typeName = statusValue['name'] as String? ?? '';
+              print('  - 실제 상태명: "$typeName"');
+            }
+          }
+        } else {
+          print('  - "상태" 속성이 없습니다!');
+        }
+      } else {
+        print('⚠️ 영역·자원 데이터베이스가 비어있습니다.');
+      }
 
       // 영역과 자원으로 분리
       final areas = areaResourceData.where((data) {
         final properties = data['properties'] as Map<String, dynamic>? ?? {};
-        final typeProperty = properties['타입'] as Map<String, dynamic>? ?? {};
-        final selectValue = typeProperty['select'] as Map<String, dynamic>? ?? {};
-        final typeName = selectValue['name'] as String? ?? '';
+        final typeProperty = properties['상태'] as Map<String, dynamic>? ?? {};
+        final statusValue = typeProperty['status'] as Map<String, dynamic>? ?? {};
+        final typeName = statusValue['name'] as String? ?? '';
+        print('🔍 영역 필터링 - 상태명: "$typeName"');
         return typeName == '영역';
       }).map((data) => NotionTask.fromNotion(data)).toList();
 
       final resources = areaResourceData.where((data) {
         final properties = data['properties'] as Map<String, dynamic>? ?? {};
-        final typeProperty = properties['타입'] as Map<String, dynamic>? ?? {};
-        final selectValue = typeProperty['select'] as Map<String, dynamic>? ?? {};
-        final typeName = selectValue['name'] as String? ?? '';
+        final typeProperty = properties['상태'] as Map<String, dynamic>? ?? {};
+        final statusValue = typeProperty['status'] as Map<String, dynamic>? ?? {};
+        final typeName = statusValue['name'] as String? ?? '';
+        print('🔍 자원 필터링 - 상태명: "$typeName"');
         return typeName == '자원';
       }).map((data) => NotionTask.fromNotion(data)).toList();
+      
+      print('📈 최종 결과:');
+      print('  - 영역: ${areas.length}개');
+      print('  - 자원: ${resources.length}개');
 
       setState(() {
         _notionTasks = todayTasks;
