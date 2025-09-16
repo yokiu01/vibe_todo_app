@@ -7,6 +7,7 @@ class LockScreenService {
   static const MethodChannel _channel = MethodChannel('plan_do_lock_screen');
   static Function? _onScreenOn;
   static bool _isInitialized = false;
+  static DateTime? _lastScreenOnTime;
 
   // 초기화 및 네이티브 이벤트 리스너 설정
   static void initialize({Function? onScreenOn}) {
@@ -19,14 +20,33 @@ class LockScreenService {
 
   // 네이티브에서 오는 콜백 처리
   static Future<void> _handleMethodCall(MethodCall call) async {
+    print('LockScreenService: Method call received: ${call.method}');
     switch (call.method) {
       case 'onScreenOn':
+        final now = DateTime.now();
+        print('LockScreenService: Screen on event received at $now');
+        
+        // 중복 호출 방지 (1초 이내 중복 호출 무시)
+        if (_lastScreenOnTime != null && 
+            now.difference(_lastScreenOnTime!).inSeconds < 1) {
+          print('LockScreenService: Skipping duplicate screen on event');
+          return;
+        }
+        
+        _lastScreenOnTime = now;
         final isEnabled = await isLockScreenEnabled();
+        print('LockScreenService: Screen on event received, lock screen enabled: $isEnabled');
+        print('LockScreenService: _onScreenOn callback is null: ${_onScreenOn == null}');
+        
         if (_onScreenOn != null && isEnabled) {
+          print('LockScreenService: Calling _onScreenOn callback');
           _onScreenOn!();
+        } else {
+          print('LockScreenService: Not calling callback - _onScreenOn: ${_onScreenOn != null}, isEnabled: $isEnabled');
         }
         break;
       case 'onUserPresent':
+        print('User present event received');
         // 사용자가 잠금해제했을 때는 오버레이를 닫을 수도 있음
         break;
     }
@@ -55,12 +75,17 @@ class LockScreenService {
   // 수동으로 오버레이 표시 (테스트용)
   static Future<void> showOverlayManually() async {
     try {
+      print('LockScreenService: showOverlayManually called');
+      print('LockScreenService: _onScreenOn is null: ${_onScreenOn == null}');
+      
       // 새로운 lockscreen을 직접 호출
       if (_onScreenOn != null) {
+        print('LockScreenService: Calling _onScreenOn callback directly');
         _onScreenOn!();
         return;
       }
 
+      print('LockScreenService: _onScreenOn is null, trying native method');
       // 기존 네이티브 방식 호출 (백업)
       await _channel.invokeMethod('showLockScreenOverlay');
     } catch (e) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -8,6 +9,7 @@ import 'providers/review_provider.dart';
 import 'providers/pds_diary_provider.dart';
 import 'screens/main_navigation.dart';
 import 'screens/lock_screen.dart';
+import 'screens/lock_screen_standalone.dart';
 import 'services/lock_screen_service.dart';
 
 void main() async {
@@ -15,6 +17,8 @@ void main() async {
   await initializeDateFormatting('ko', null);
   runApp(const ProductivityApp());
 }
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class ProductivityApp extends StatefulWidget {
   const ProductivityApp({super.key});
@@ -24,6 +28,9 @@ class ProductivityApp extends StatefulWidget {
 }
 
 class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingObserver {
+  bool _isShowingLockScreen = false;
+  DateTime? _lastLockScreenShown;
+
   @override
   void initState() {
     super.initState();
@@ -32,9 +39,28 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
     // 잠금화면 서비스 초기화
     LockScreenService.initialize(onScreenOn: () {
       if (mounted) {
-        showLockScreen(context);
+        _showLockScreenIfNeeded();
       }
     });
+
+    // 앱 시작 시 락스크린 활성화
+    _initializeLockScreen();
+  }
+
+  Future<void> _initializeLockScreen() async {
+    try {
+      // 락스크린이 비활성화되어 있다면 활성화
+      final isEnabled = await LockScreenService.isLockScreenEnabled();
+      if (!isEnabled) {
+        await LockScreenService.setLockScreenEnabled(true);
+        print('Lock screen enabled by default');
+      }
+
+      // 앱 시작 시에는 락스크린을 표시하지 않음 (사용자가 의도적으로 앱을 열었기 때문)
+      print('Lock screen initialized but not shown on app startup');
+    } catch (e) {
+      print('Error initializing lock screen: $e');
+    }
   }
 
   @override
@@ -46,27 +72,93 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    print('App lifecycle state changed: $state');
+    
     // 앱이 포그라운드로 돌아왔을 때 (화면 켜짐 포함)
     if (state == AppLifecycleState.resumed) {
-      // 약간 딜레이를 주어 앱이 완전히 로드된 후 잠금화면 표시
-      Future.delayed(const Duration(milliseconds: 300), () {
+      print('App resumed, checking lock screen...');
+      // 약간의 딜레이를 주어 앱이 완전히 로드된 후 잠금화면 표시
+      Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
-          showLockScreen(context);
+          _showLockScreenIfNeeded();
         }
       });
     }
   }
 
+  Future<void> _showLockScreenIfNeeded() async {
+    try {
+      final now = DateTime.now();
+      print('_showLockScreenIfNeeded called at $now');
+
+      // 마지막 표시 후 3초 이내면 스킵 (중복 방지)
+      if (_lastLockScreenShown != null &&
+          now.difference(_lastLockScreenShown!).inSeconds < 3) {
+        print('Skipping lock screen - shown recently (${now.difference(_lastLockScreenShown!).inSeconds}s ago)');
+        return;
+      }
+
+      final isEnabled = await LockScreenService.isLockScreenEnabled();
+      print('Lock screen enabled: $isEnabled, mounted: $mounted, _isShowingLockScreen: $_isShowingLockScreen');
+
+      if (isEnabled && mounted && !_isShowingLockScreen) {
+        print('Showing lock screen...');
+        _isShowingLockScreen = true;
+        _lastLockScreenShown = now;
+
+        // 약간 딜레이를 주어 앱이 완전히 로드된 후 잠금화면 표시
+        Future.delayed(const Duration(milliseconds: 1000), () async {
+          if (mounted && navigatorKey.currentContext != null) {
+            print('About to show lock screen dialog');
+            try {
+              await showLockScreen(navigatorKey.currentContext!);
+              print('Lock screen dialog closed');
+              // Lock screen이 닫힌 후 앱을 백그라운드로 보내기
+              if (mounted) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  SystemNavigator.pop();
+                });
+              }
+            } catch (error) {
+              print('Error showing lock screen: $error');
+            } finally {
+              // 반드시 플래그를 reset
+              if (mounted) {
+                setState(() {
+                  _isShowingLockScreen = false;
+                });
+              }
+            }
+          } else {
+            print('Widget not mounted or navigator context null, skipping lock screen');
+            _isShowingLockScreen = false;
+          }
+        });
+      } else {
+        print('Not showing lock screen - isEnabled: $isEnabled, mounted: $mounted, _isShowingLockScreen: $_isShowingLockScreen');
+      }
+    } catch (e) {
+      print('Error checking lock screen status: $e');
+      _isShowingLockScreen = false;
+    }
+  }
+
+  Future<void> _checkAndShowLockScreen() async {
+    // 기존 메서드는 호환성을 위해 유지
+    await _showLockScreenIfNeeded();
+  }
+
   @override
   Widget build(BuildContext context) {
-            return MultiProvider(
-              providers: [
-                ChangeNotifierProvider(create: (_) => ItemProvider()),
-                ChangeNotifierProvider(create: (_) => DailyPlanProvider()),
-                ChangeNotifierProvider(create: (_) => ReviewProvider()),
-                ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
-              ],
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ItemProvider()),
+        ChangeNotifierProvider(create: (_) => DailyPlanProvider()),
+        ChangeNotifierProvider(create: (_) => ReviewProvider()),
+        ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
+      ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'ProductivityFlow',
         debugShowCheckedModeBanner: false,
         localizationsDelegates: const [
@@ -209,7 +301,16 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
             behavior: SnackBarBehavior.floating,
           ),
         ),
-        home: const MainNavigation(),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const MainNavigation(),
+          '/lockScreenStandalone': (context) => MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
+            ],
+            child: const LockScreenStandalone(),
+          ),
+        },
       ),
     );
   }

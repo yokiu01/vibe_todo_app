@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/pds_diary_provider.dart';
 import '../models/pds_plan.dart';
 import '../services/lock_screen_service.dart';
 
-class LockScreen extends StatefulWidget {
-  const LockScreen({super.key});
+// LockScreenActivity 전용 독립 화면
+class LockScreenStandalone extends StatefulWidget {
+  const LockScreenStandalone({super.key});
 
   @override
-  State<LockScreen> createState() => _LockScreenState();
+  State<LockScreenStandalone> createState() => _LockScreenStandaloneState();
 }
 
-class _LockScreenState extends State<LockScreen>
+class _LockScreenStandaloneState extends State<LockScreenStandalone>
     with TickerProviderStateMixin {
+  static const MethodChannel _channel = MethodChannel('plan_do_lock_screen');
   DateTime _selectedDate = DateTime.now();
   late AnimationController _fadeController;
   late AnimationController _slideController;
@@ -28,6 +30,18 @@ class _LockScreenState extends State<LockScreen>
     _initializeAnimations();
     _checkEditPermission();
     _loadData();
+    _setupMethodChannel();
+  }
+
+  void _setupMethodChannel() {
+    _channel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'showLockScreen':
+          print('LockScreenStandalone: showLockScreen called');
+          // 이미 표시되어 있으므로 아무것도 하지 않음
+          break;
+      }
+    });
   }
 
   void _initializeAnimations() {
@@ -68,7 +82,6 @@ class _LockScreenState extends State<LockScreen>
   }
 
   Future<void> _loadData() async {
-    // Post frame callback을 사용하여 build 사이클 이후 호출
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         try {
@@ -78,6 +91,16 @@ class _LockScreenState extends State<LockScreen>
         }
       }
     });
+  }
+
+  void _closeLockScreen() async {
+    try {
+      await _channel.invokeMethod('closeLockScreen');
+    } catch (e) {
+      print('Error closing lock screen: $e');
+      // 폴백: SystemNavigator 사용
+      SystemNavigator.pop();
+    }
   }
 
   @override
@@ -190,7 +213,6 @@ class _LockScreenState extends State<LockScreen>
         final plannedActivities = currentPlan?.freeformPlans ?? {};
         final actualActivities = currentPlan?.actualActivities ?? {};
 
-        // Show next 6 hours from current time
         final currentHour = DateTime.now().hour;
         final relevantSlots = timeSlots.where((slot) {
           return slot.hour24 >= currentHour && slot.hour24 < currentHour + 6;
@@ -281,8 +303,8 @@ class _LockScreenState extends State<LockScreen>
                                     Container(
                                       width: 8,
                                       height: 8,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF3B82F6),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF3B82F6),
                                         shape: BoxShape.circle,
                                       ),
                                     ),
@@ -309,8 +331,8 @@ class _LockScreenState extends State<LockScreen>
                                     Container(
                                       width: 8,
                                       height: 8,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF10B981),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF10B981),
                                         shape: BoxShape.circle,
                                       ),
                                     ),
@@ -380,7 +402,7 @@ class _LockScreenState extends State<LockScreen>
                 child: _buildActionButton(
                   icon: Icons.playlist_add_check,
                   label: '계획 보기',
-                  onTap: () => _openPlanPage(),
+                  onTap: () => _openMainApp(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -388,7 +410,7 @@ class _LockScreenState extends State<LockScreen>
                 child: _buildActionButton(
                   icon: Icons.edit_note,
                   label: 'DO 기록',
-                  onTap: _canEdit ? () => _openDoPage() : null,
+                  onTap: _canEdit ? () => _openMainApp() : null,
                 ),
               ),
             ],
@@ -399,7 +421,7 @@ class _LockScreenState extends State<LockScreen>
             child: _buildActionButton(
               icon: Icons.close,
               label: '닫기',
-              onTap: () => Navigator.of(context).pop(),
+              onTap: () => _closeLockScreen(),
             ),
           ),
         ],
@@ -456,70 +478,8 @@ class _LockScreenState extends State<LockScreen>
     );
   }
 
-  void _openPlanPage() {
-    // Navigate to planning screen
-    Navigator.of(context).pop();
-    // You might want to navigate to a specific tab in the main app
-  }
-
-  void _openDoPage() {
-    // Navigate to do-see screen
-    Navigator.of(context).pop();
-    // You might want to navigate to a specific tab in the main app
-  }
-}
-
-// Function to show lock screen
-Future<void> showLockScreen(BuildContext context) async {
-  print('showLockScreen called');
-  final isEnabled = await LockScreenService.isLockScreenEnabled();
-  print('showLockScreen - isEnabled: $isEnabled');
-  if (!isEnabled) {
-    print('showLockScreen - lock screen not enabled, returning');
-    return;
-  }
-
-  print('showLockScreen - showing lock screen');
-  try {
-    // Provider로 감싼 LockScreen 사용
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => MultiProvider(
-          providers: [
-            ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
-          ],
-          child: const LockScreen(),
-        ),
-        fullscreenDialog: true,
-        maintainState: false,
-      ),
-    );
-    print('showLockScreen - lock screen closed');
-  } catch (e) {
-    print('showLockScreen - error: $e');
-    // Fallback: 시스템 오버레이 사용
-    try {
-      await showGeneralDialog(
-        context: context,
-        barrierDismissible: false,
-        barrierColor: Colors.black87,
-        transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, animation, secondaryAnimation) => MultiProvider(
-          providers: [
-            ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
-          ],
-          child: const LockScreen(),
-        ),
-        transitionBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
-        },
-      );
-      print('showLockScreen - fallback dialog closed');
-    } catch (e2) {
-      print('showLockScreen - fallback error: $e2');
-    }
+  void _openMainApp() {
+    // 메인 앱 열기 (MainActivity)
+    _closeLockScreen();
   }
 }

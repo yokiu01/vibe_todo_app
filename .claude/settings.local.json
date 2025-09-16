@@ -6,7 +6,9 @@
       "Bash(flutter:*)",
       "Bash(timeout 30 flutter run)",
       "Bash(timeout:*)",
-      "Bash(nc:*)"
+      "Bash(nc:*)",
+      "Bash(printf \"R\\n\")",
+      "Bash(adb logcat:*)"
     ],
     "deny": [],
     "ask": []

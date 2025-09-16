@@ -95,10 +95,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final projectsData = await _authService.apiService!.queryDatabase(
         '1159f5e4a81180019f29cdd24d369230', // PROJECT_DB_ID
         {
-          "property": "상태",
-          "status": {
-            "is_not_empty": true
-          }
+          "or": [
+            {
+              "property": "상태",
+              "status": {
+                "equals": "진행 중"
+              }
+            },
+            {
+              "property": "상태", 
+              "status": {
+                "equals": "시작 안 함"
+              }
+            }
+          ]
         }
       );
       final activeProjects = projectsData.map((data) => NotionTask.fromNotion(data)).toList();
@@ -266,78 +276,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _buildStatusCard('오늘 할일', '${_notionTasks.length}개', const Color(0xFF3B82F6)),
-              const SizedBox(width: 12),
-              _buildStatusCard('프로젝트 DB', '${_notionProjects.length}개', const Color(0xFF10B981)),
-              const SizedBox(width: 12),
-              _buildStatusCard('고정 메모', '${_pinnedNotes.length}개', const Color(0xFFF59E0B)),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusCard(String title, String count, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              count,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 11,
-                color: color.withOpacity(0.8),
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildTabBar() {
     return Container(
       color: Colors.white,
       child: TabBar(
         controller: _tabController,
-        isScrollable: true,
+        isScrollable: false,
         indicator: BoxDecoration(
           color: const Color(0xFF2563EB),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
+        indicatorSize: TabBarIndicatorSize.tab,
         labelColor: Colors.white,
-        unselectedLabelColor: const Color(0xFF64748B),
+        unselectedLabelColor: const Color(0xFF2563EB),
         labelStyle: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
         ),
         unselectedLabelStyle: const TextStyle(
-          fontSize: 12,
+          fontSize: 14,
           fontWeight: FontWeight.normal,
         ),
-        indicatorPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        tabs: _tabs,
+        labelPadding: EdgeInsets.zero,
+        tabs: [
+          for (final t in _tabs)
+            Tab(
+              child: SizedBox.expand(
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (t.icon != null) t.icon!,
+                      if (t.icon != null) const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          t.text ?? '',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

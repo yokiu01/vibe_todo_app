@@ -630,26 +630,91 @@ class NotionApiService {
     try {
       // 모든 항목을 가져온 후 클라이언트에서 오늘 생성된 것만 필터링
       final allItems = await queryDatabase(MEMO_DB_ID, null);
-      
+
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final tomorrow = today.add(const Duration(days: 1));
-      
+
       // 오늘 생성된 항목들만 필터링
       final todayItems = allItems.where((item) {
         final createdTime = item['created_time'] as String?;
         if (createdTime == null) return false;
-        
+
         final created = DateTime.tryParse(createdTime);
         if (created == null) return false;
-        
-        return created.isAfter(today.subtract(const Duration(seconds: 1))) && 
+
+        return created.isAfter(today.subtract(const Duration(seconds: 1))) &&
                created.isBefore(tomorrow);
       }).toList();
-      
+
       return todayItems;
     } catch (e) {
       print('getTodayCollectedItems 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 특정 영역/자원/프로젝트와 관련된 노트들을 찾는 메서드
+  Future<List<Map<String, dynamic>>> getRelatedNotes(String parentTitle) async {
+    try {
+      // 노트 데이터베이스에서 해당 영역/자원/프로젝트와 관련된 노트들을 찾음
+      final allNotes = await queryDatabase(MEMO_DB_ID, null);
+
+      // 제목이나 내용에서 관련성을 찾음
+      final relatedNotes = allNotes.where((note) {
+        final properties = note['properties'] as Map<String, dynamic>? ?? {};
+
+        // 제목에서 관련성 확인
+        final nameProperty = properties['이름'] as Map<String, dynamic>? ?? {};
+        final titleArray = nameProperty['title'] as List<dynamic>? ?? [];
+        final title = titleArray.isNotEmpty
+            ? (titleArray.first['text']?['content'] as String? ?? '')
+            : '';
+
+        // 태그나 관련 속성에서 관련성 확인
+        final tagProperty = properties['태그'] as Map<String, dynamic>? ?? {};
+        final multiSelect = tagProperty['multi_select'] as List<dynamic>? ?? [];
+        final tags = multiSelect.map((tag) => tag['name'] as String? ?? '').toList();
+
+        // 관련 프로젝트/영역 속성 확인
+        final relatedProperty = properties['관련'] as Map<String, dynamic>? ?? {};
+        final relatedSelect = relatedProperty['select'] as Map<String, dynamic>? ?? {};
+        final relatedValue = relatedSelect['name'] as String? ?? '';
+
+        return title.contains(parentTitle) ||
+               tags.any((tag) => tag.contains(parentTitle)) ||
+               relatedValue.contains(parentTitle);
+      }).toList();
+
+      return relatedNotes;
+    } catch (e) {
+      print('getRelatedNotes 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 모든 노트를 가져오는 메서드 (분류별 필터링 가능)
+  Future<List<Map<String, dynamic>>> getAllNotes({String? categoryFilter}) async {
+    try {
+      final allNotes = await queryDatabase(MEMO_DB_ID, null);
+
+      if (categoryFilter == null) {
+        return allNotes;
+      }
+
+      // 분류별 필터링
+      final filteredNotes = allNotes.where((note) {
+        final properties = note['properties'] as Map<String, dynamic>? ?? {};
+        final categoryProperty = properties['분류'] as Map<String, dynamic>? ?? {};
+        final selectValue = categoryProperty['select'] as Map<String, dynamic>? ?? {};
+        final categoryName = selectValue['name'] as String? ?? '';
+
+        return categoryName == categoryFilter;
+      }).toList();
+
+      return filteredNotes;
+    } catch (e) {
+      print('getAllNotes 오류: $e');
       rethrow;
     }
   }

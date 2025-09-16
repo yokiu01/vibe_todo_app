@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/notion_api_service.dart';
 import '../services/lock_screen_service.dart';
+import 'lock_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -105,10 +106,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _testOverlay() async {
     try {
-      await LockScreenService.showOverlayManually();
-      _showSnackBar('오버레이 테스트가 실행되었습니다.');
+      print('Settings: Testing lock screen overlay');
+      // 락스크린을 직접 표시
+      await showLockScreen(context);
+      _showSnackBar('락스크린 테스트가 실행되었습니다.');
     } catch (e) {
-      _showSnackBar('오버레이 테스트 실패: $e', isError: true);
+      print('Settings: Lock screen test failed: $e');
+      _showSnackBar('락스크린 테스트 실패: $e', isError: true);
+    }
+  }
+
+  Future<void> _testScreenOnEvent() async {
+    try {
+      print('Settings: Testing screen on event manually');
+      // 수동으로 screen on 이벤트 시뮬레이션
+      await LockScreenService.showOverlayManually();
+      _showSnackBar('Screen on 이벤트 테스트가 실행되었습니다.');
+    } catch (e) {
+      print('Settings: Screen on event test failed: $e');
+      _showSnackBar('Screen on 이벤트 테스트 실패: $e', isError: true);
     }
   }
 
@@ -302,6 +318,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: '잠금화면 오버레이 미리보기',
                           iconColor: Colors.green,
                           onTap: _testOverlay,
+                        ),
+                        const Divider(),
+                        _buildSettingTile(
+                          icon: Icons.screen_lock_portrait,
+                          title: 'Screen On 이벤트 테스트',
+                          subtitle: '화면 켜짐 이벤트 수동 시뮬레이션',
+                          iconColor: Colors.blue,
+                          onTap: _testScreenOnEvent,
                         ),
                       ],
                     ],
