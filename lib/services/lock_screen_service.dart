@@ -5,7 +5,69 @@ import '../models/task.dart';
 
 class LockScreenService {
   static const MethodChannel _channel = MethodChannel('plan_do_lock_screen');
-  
+  static Function? _onScreenOn;
+  static bool _isInitialized = false;
+
+  // 초기화 및 네이티브 이벤트 리스너 설정
+  static void initialize({Function? onScreenOn}) {
+    if (_isInitialized) return;
+
+    _onScreenOn = onScreenOn;
+    _channel.setMethodCallHandler(_handleMethodCall);
+    _isInitialized = true;
+  }
+
+  // 네이티브에서 오는 콜백 처리
+  static Future<void> _handleMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'onScreenOn':
+        final isEnabled = await isLockScreenEnabled();
+        if (_onScreenOn != null && isEnabled) {
+          _onScreenOn!();
+        }
+        break;
+      case 'onUserPresent':
+        // 사용자가 잠금해제했을 때는 오버레이를 닫을 수도 있음
+        break;
+    }
+  }
+
+  // 오버레이 권한 확인
+  static Future<bool> hasOverlayPermission() async {
+    try {
+      final result = await _channel.invokeMethod('checkOverlayPermission');
+      return result as bool;
+    } catch (e) {
+      print('Error checking overlay permission: $e');
+      return false;
+    }
+  }
+
+  // 오버레이 권한 요청
+  static Future<void> requestOverlayPermission() async {
+    try {
+      await _channel.invokeMethod('requestOverlayPermission');
+    } catch (e) {
+      print('Error requesting overlay permission: $e');
+    }
+  }
+
+  // 수동으로 오버레이 표시 (테스트용)
+  static Future<void> showOverlayManually() async {
+    try {
+      // 새로운 lockscreen을 직접 호출
+      if (_onScreenOn != null) {
+        _onScreenOn!();
+        return;
+      }
+
+      // 기존 네이티브 방식 호출 (백업)
+      await _channel.invokeMethod('showLockScreenOverlay');
+    } catch (e) {
+      print('Error showing overlay manually: $e');
+    }
+  }
+
   // 잠금화면에서 plan과 do를 볼 수 있는지 설정
   static Future<bool> isLockScreenEnabled() async {
     final prefs = await SharedPreferences.getInstance();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +20,8 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
   String _seeNotes = '';
   Map<String, TextEditingController> _activityControllers = {};
   TextEditingController _seeNotesController = TextEditingController();
+  Timer? _activityDebounceTimer;
+  Timer? _seeNotesDebounceTimer;
 
   @override
   void initState() {
@@ -28,14 +31,28 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
       context.read<PDSDiaryProvider>().loadPDSPlans();
       context.read<ItemProvider>().loadItems();
       _loadCurrentPlan();
+
+      // PDSDiaryProvider의 변경사항을 수신
+      context.read<PDSDiaryProvider>().addListener(_onProviderChanged);
     });
   }
 
   @override
   void dispose() {
+    // 리스너 제거
+    context.read<PDSDiaryProvider>().removeListener(_onProviderChanged);
     _activityControllers.values.forEach((controller) => controller.dispose());
     _seeNotesController.dispose();
+    _activityDebounceTimer?.cancel();
+    _seeNotesDebounceTimer?.cancel();
     super.dispose();
+  }
+
+  void _onProviderChanged() {
+    // Provider 데이터가 변경되었을 때 현재 계획 다시 로드
+    if (mounted) {
+      _loadCurrentPlan();
+    }
   }
 
   void _initializeControllers() {
@@ -45,32 +62,74 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
     }
   }
 
+  bool _hasInitialized = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 화면이 활성화될 때마다 새로고침
-    context.read<PDSDiaryProvider>().loadPDSPlans();
-    context.read<ItemProvider>().loadItems();
+    // 초기화 한 번만 실행
+    if (!_hasInitialized) {
+      _hasInitialized = true;
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    print('PDS DO-SEE: 데이터 새로고침 시작');
+    await context.read<PDSDiaryProvider>().loadPDSPlans();
+    await context.read<ItemProvider>().loadItems();
+    _loadCurrentPlan();
+    print('PDS DO-SEE: 데이터 새로고침 완료');
   }
 
   void _loadCurrentPlan() {
     final pdsProvider = context.read<PDSDiaryProvider>();
     final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
 
-    if (currentPlan != null) {
-      setState(() {
-        _actualActivities = currentPlan.actualActivities ?? {};
-        _seeNotes = currentPlan.seeNotes ?? '';
-      });
+    print('PDS DO-SEE: ${_selectedDate.toIso8601String().split('T')[0]} 날짜의 계획 로드');
+    print('PDS DO-SEE: 현재 계획 존재 여부: ${currentPlan != null}');
 
-      // Update controllers with loaded data
-      _actualActivities.forEach((key, value) {
-        if (_activityControllers.containsKey(key)) {
-          _activityControllers[key]!.text = value;
+    if (currentPlan != null) {
+      final newActualActivities = currentPlan.actualActivities ?? {};
+      final newSeeNotes = currentPlan.seeNotes ?? '';
+
+      print('PDS DO-SEE: 실제 활동 데이터: $newActualActivities');
+      print('PDS DO-SEE: 회고 노트: $newSeeNotes');
+
+      // 데이터가 실제로 변경된 경우에만 업데이트
+      bool hasChanged = false;
+
+      if (_mapEquals(newActualActivities, _actualActivities) == false) {
+        print('PDS DO-SEE: 실제 활동 데이터 변경됨');
+        _actualActivities = Map<String, String>.from(newActualActivities);
+        hasChanged = true;
+
+        // 컨트롤러 업데이트 (setState 없이)
+        newActualActivities.forEach((key, value) {
+          if (_activityControllers.containsKey(key)) {
+            if (_activityControllers[key]!.text != value) {
+              _activityControllers[key]!.text = value;
+            }
+          }
+        });
+      }
+
+      if (_seeNotes != newSeeNotes) {
+        print('PDS DO-SEE: 회고 노트 변경됨');
+        _seeNotes = newSeeNotes;
+        hasChanged = true;
+
+        if (_seeNotesController.text != newSeeNotes) {
+          _seeNotesController.text = newSeeNotes;
         }
-      });
-      _seeNotesController.text = _seeNotes;
+      }
+
+      // 변경사항이 있을 때만 setState 호출
+      if (hasChanged) {
+        setState(() {});
+      }
     } else {
+      print('PDS DO-SEE: 새로운 날짜 - 컨트롤러 초기화');
       // Clear controllers for new date
       _activityControllers.values.forEach((controller) => controller.clear());
       _seeNotesController.clear();
@@ -79,6 +138,14 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         _seeNotes = '';
       });
     }
+  }
+
+  bool _mapEquals(Map<String, String> map1, Map<String, String> map2) {
+    if (map1.length != map2.length) return false;
+    for (String key in map1.keys) {
+      if (map1[key] != map2[key]) return false;
+    }
+    return true;
   }
 
   Future<void> _showDatePicker() async {
@@ -108,9 +175,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         _selectedDate = selectedDate;
       });
       // 날짜가 변경되면 해당 날짜의 데이터 로드
-      context.read<PDSDiaryProvider>().loadPDSPlans();
-      context.read<ItemProvider>().loadItems();
-      _loadCurrentPlan();
+      await _refreshData();
     }
   }
 
@@ -130,17 +195,18 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async {
-            context.read<PDSDiaryProvider>().loadPDSPlans();
-            context.read<ItemProvider>().loadItems();
-          },
+          onRefresh: _refreshData,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               children: [
                 _buildHeader(),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height - 200,
+                Container(
+                  constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height > 300
+                ? MediaQuery.of(context).size.height - 200
+                : 100,
+            ),
                   child: _buildDoSeeLayout(),
                 ),
               ],
@@ -213,6 +279,9 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
         final plannedActivities = currentPlan?.freeformPlans ?? {};
         final dailyTasks = _getDailyTasks(itemProvider.items);
+
+        // Consumer 내에서는 상태 변경 없이 단순히 데이터만 표시
+        // 실제 데이터 동기화는 _loadCurrentPlan에서 처리
 
         return SingleChildScrollView(
           child: Column(
@@ -303,50 +372,63 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
 
   Widget _buildPlannedDisplay(TimeSlot slot, Map<String, String> plannedActivities, List<Item> dailyTasks) {
     final plannedText = plannedActivities[slot.key] ?? '';
-    
+
+    // 디버그 로그 추가
+    if (plannedText.isNotEmpty) {
+      print('PDS DO-SEE: ${slot.key} 시간대에 계획된 활동: $plannedText');
+    }
+
     // 해당 시간대의 할일 찾기
     final slotTasks = dailyTasks.where((task) {
       if (task.dueDate == null) return false;
       final taskHour = task.dueDate!.hour;
       return taskHour == slot.hour24;
     }).toList();
-    
+
     return Container(
       height: 60,
       margin: const EdgeInsets.only(bottom: 2),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: plannedText.isNotEmpty || slotTasks.isNotEmpty
+            ? const Color(0xFFF0F9FF)
+            : const Color(0xFFF8FAFC),
+        border: Border.all(
+          color: plannedText.isNotEmpty || slotTasks.isNotEmpty
+              ? const Color(0xFF3B82F6).withOpacity(0.3)
+              : const Color(0xFFE2E8F0),
+        ),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (plannedText.isNotEmpty)
-            Text(
-              plannedText,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Color(0xFF64748B),
-                fontStyle: FontStyle.italic,
+            Expanded(
+              child: Text(
+                plannedText,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF1E40AF),
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
           if (slotTasks.isNotEmpty) ...[
-            if (plannedText.isNotEmpty) const SizedBox(height: 4),
-            ...slotTasks.map((task) => Container(
-              margin: const EdgeInsets.only(bottom: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            if (plannedText.isNotEmpty) const SizedBox(height: 2),
+            ...slotTasks.take(2).map((task) => Container(
+              margin: const EdgeInsets.only(bottom: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(
                 color: task.status == ItemStatus.completed ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 task.title,
                 style: const TextStyle(
-                  fontSize: 9,
+                  fontSize: 8,
                   color: Colors.white,
                   fontWeight: FontWeight.w500,
                 ),
@@ -355,6 +437,16 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
               ),
             )),
           ],
+          if (plannedText.isEmpty && slotTasks.isEmpty)
+            const Center(
+              child: Text(
+                '-',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFFE5E7EB),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -405,6 +497,13 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
           hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
           filled: true,
           fillColor: Colors.white,
+          suffixIcon: _hasPlannedActivity(slot)
+            ? IconButton(
+                icon: const Icon(Icons.copy, size: 16, color: Color(0xFF3B82F6)),
+                onPressed: () => _copyPlanToActivity(slot),
+                tooltip: 'Plan에서 복사하기',
+              )
+            : null,
         ),
         style: const TextStyle(fontSize: 12),
         maxLines: 2,
@@ -412,6 +511,19 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
           setState(() {
             _actualActivities[slot.key] = value;
           });
+          // 디바운싱으로 실시간 저장
+          _activityDebounceTimer?.cancel();
+          _activityDebounceTimer = Timer(const Duration(seconds: 1), () {
+            _saveActualActivity(slot.key, value);
+          });
+        },
+        onSubmitted: (value) {
+          _activityDebounceTimer?.cancel();
+          _saveActualActivity(slot.key, value);
+        },
+        onEditingComplete: () {
+          _activityDebounceTimer?.cancel();
+          final value = _activityControllers[slot.key]?.text ?? '';
           _saveActualActivity(slot.key, value);
         },
       ),
@@ -472,7 +584,11 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
               setState(() {
                 _seeNotes = value;
               });
-              _saveSeeNotes(value);
+              // 디바운싱으로 실시간 저장
+              _seeNotesDebounceTimer?.cancel();
+              _seeNotesDebounceTimer = Timer(const Duration(seconds: 2), () {
+                _saveSeeNotes(value);
+              });
             },
           ),
         ],
@@ -482,12 +598,25 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
 
   Future<void> _saveActualActivity(String timeKey, String content) async {
     try {
-      await context.read<PDSDiaryProvider>().updateActualActivity(
+      print('PDS DO-SEE: 실제 활동 저장 시작 - $timeKey: $content');
+      await context.read<PDSDiaryProvider>().saveActualActivity(
         _selectedDate,
         timeKey,
         content,
       );
+      print('PDS DO-SEE: 실제 활동 저장 완료');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('실제 활동이 저장되었습니다'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
     } catch (e) {
+      print('PDS DO-SEE: 실제 활동 저장 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -501,11 +630,24 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
 
   Future<void> _saveSeeNotes(String notes) async {
     try {
-      await context.read<PDSDiaryProvider>().updateSeeNotes(
+      print('PDS DO-SEE: 회고 노트 저장 시작 - $notes');
+      await context.read<PDSDiaryProvider>().saveSeeNotes(
         _selectedDate,
         notes,
       );
+      print('PDS DO-SEE: 회고 노트 저장 완료');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('회고 노트가 저장되었습니다'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
     } catch (e) {
+      print('PDS DO-SEE: 회고 노트 저장 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -514,6 +656,36 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
           ),
         );
       }
+    }
+  }
+
+  bool _hasPlannedActivity(TimeSlot slot) {
+    final pdsProvider = context.read<PDSDiaryProvider>();
+    final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
+    final plannedText = currentPlan?.freeformPlans?[slot.key] ?? '';
+    return plannedText.isNotEmpty;
+  }
+
+  void _copyPlanToActivity(TimeSlot slot) {
+    final pdsProvider = context.read<PDSDiaryProvider>();
+    final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
+    final plannedText = currentPlan?.freeformPlans?[slot.key] ?? '';
+
+    if (plannedText.isNotEmpty) {
+      _activityControllers[slot.key]?.text = plannedText;
+      setState(() {
+        _actualActivities[slot.key] = plannedText;
+      });
+
+      _saveActualActivity(slot.key, plannedText);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Plan에서 복사되었습니다'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 1),
+        ),
+      );
     }
   }
 }

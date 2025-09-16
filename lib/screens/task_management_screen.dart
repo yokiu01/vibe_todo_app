@@ -80,18 +80,74 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     });
 
     try {
-      final items = await _authService.apiService!.getOverdueTasks();
-      final tasks = items.map((item) => NotionTask.fromNotion(item)).toList();
+      print('기한 지난 할일 로드 시작');
       
-      setState(() {
-        _overdueTasks = tasks;
-        _loadingStates['overdue'] = false;
-      });
+      // 모든 할일을 가져온 후 클라이언트에서 필터링
+      final allItems = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
+        null
+      );
+      print('전체 할일: ${allItems.length}개 로드됨');
+      
+      // 기한 지난 할일 필터링
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      
+      final overdueItems = allItems.where((item) {
+        // 완료되지 않은 항목만
+        final properties = item['properties'] as Map<String, dynamic>?;
+        if (properties == null) return false;
+        
+        final completed = properties['완료'] as Map<String, dynamic>?;
+        final isCompleted = completed?['checkbox'] as bool? ?? false;
+        if (isCompleted) return false;
+        
+        // 날짜가 있고 오늘 이전인 항목
+        final date = properties['날짜'] as Map<String, dynamic>?;
+        if (date == null) return false;
+        
+        final dateValue = date['date'] as Map<String, dynamic>?;
+        if (dateValue == null) return false;
+        
+        final startDate = dateValue['start'] as String?;
+        if (startDate == null) return false;
+        
+        try {
+          final itemDate = DateTime.parse(startDate);
+          final itemDateOnly = DateTime(itemDate.year, itemDate.month, itemDate.day);
+          return itemDateOnly.isBefore(today);
+        } catch (e) {
+          return false;
+        }
+      }).toList();
+      
+      print('기한 지난 할일: ${overdueItems.length}개 필터링됨');
+      
+      final tasks = overdueItems.map((item) {
+        try {
+          return NotionTask.fromNotion(item);
+        } catch (e) {
+          print('기한 지난 할일 NotionTask 변환 오류: $e');
+          return null;
+        }
+      }).where((task) => task != null).cast<NotionTask>().toList();
+      
+      print('기한 지난 할일: ${tasks.length}개 NotionTask 생성됨');
+      
+      if (mounted) {
+        setState(() {
+          _overdueTasks = tasks;
+          _loadingStates['overdue'] = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _loadingStates['overdue'] = false;
-      });
-      _showErrorSnackBar('기한 지난 할일을 불러오는데 실패했습니다: $e');
+      print('기한 지난 할일 로드 오류: $e');
+      if (mounted) {
+        setState(() {
+          _loadingStates['overdue'] = false;
+        });
+        _showErrorSnackBar('기한 지난 할일을 불러오는데 실패했습니다: $e');
+      }
     }
   }
 
@@ -102,18 +158,52 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     });
 
     try {
-      final items = await _authService.apiService!.getInProgressTasks();
-      final tasks = items.map((item) => NotionTask.fromNotion(item)).toList();
+      print('진행 중인 할일 로드 시작');
       
-      setState(() {
-        _inProgressTasks = tasks;
-        _loadingStates['inProgress'] = false;
-      });
+      // 모든 할일을 가져온 후 클라이언트에서 필터링
+      final allItems = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
+        null
+      );
+      print('전체 할일: ${allItems.length}개 로드됨');
+      
+      // 진행 중인 할일 필터링 (완료되지 않은 모든 할일)
+      final inProgressItems = allItems.where((item) {
+        final properties = item['properties'] as Map<String, dynamic>?;
+        if (properties == null) return false;
+        
+        final completed = properties['완료'] as Map<String, dynamic>?;
+        final isCompleted = completed?['checkbox'] as bool? ?? false;
+        return !isCompleted;
+      }).toList();
+      
+      print('진행 중인 할일: ${inProgressItems.length}개 필터링됨');
+      
+      final tasks = inProgressItems.map((item) {
+        try {
+          return NotionTask.fromNotion(item);
+        } catch (e) {
+          print('진행 중인 할일 NotionTask 변환 오류: $e');
+          return null;
+        }
+      }).where((task) => task != null).cast<NotionTask>().toList();
+      
+      print('진행 중인 할일: ${tasks.length}개 NotionTask 생성됨');
+      
+      if (mounted) {
+        setState(() {
+          _inProgressTasks = tasks;
+          _loadingStates['inProgress'] = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _loadingStates['inProgress'] = false;
-      });
-      _showErrorSnackBar('진행 중인 할일을 불러오는데 실패했습니다: $e');
+      print('진행 중인 할일 로드 오류: $e');
+      if (mounted) {
+        setState(() {
+          _loadingStates['inProgress'] = false;
+        });
+        _showErrorSnackBar('진행 중인 할일을 불러오는데 실패했습니다: $e');
+      }
     }
   }
 
@@ -279,70 +369,25 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     _showSuccessSnackBar('Notion에서 로그아웃했습니다.');
   }
 
-  /// 할일 편집 다이얼로그 표시
-  void _showTaskEditDialog(NotionTask task) {
-    final titleController = TextEditingController(text: task.title);
-    final descriptionController = TextEditingController(text: task.description ?? '');
-    final dueDate = task.dueDate;
-    final clarification = task.clarification;
-    final status = task.status;
-    final isCompleted = task.isCompleted;
-
+  /// 할일 상세보기 및 편집 다이얼로그 표시
+  void _showTaskDetailDialog(NotionTask task) {
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('할일 편집'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: '제목',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: '상세내용',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
-                CheckboxListTile(
-                  title: const Text('완료'),
-                  value: isCompleted,
-                  onChanged: (value) {
-                    setDialogState(() {
-                      // 상태 업데이트
-                    });
-                  },
-                ),
-              ],
-            ),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          child: _TaskDetailView(
+            task: task,
+            onUpdate: (updatedTask) {
+              Navigator.of(context).pop();
+              _loadAllTasks(); // 새로고침
+            },
+            onClose: () => Navigator.of(context).pop(),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await _updateTask(task, {
-                  'title': titleController.text,
-                  'description': descriptionController.text,
-                  'completed': isCompleted,
-                });
-                Navigator.of(context).pop();
-              },
-              child: const Text('저장'),
-            ),
-          ],
         ),
       ),
     );
@@ -413,33 +458,55 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('할일관리'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '기한지남'),
-            Tab(text: '진행중'),
-            Tab(text: '다음행동'),
-            Tab(text: '위임'),
-          ],
-        ),
-      ),
-      body: _isAuthenticated
-          ? RefreshIndicator(
-              onRefresh: _loadAllTasks,
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildOverdueTab(),
-                  _buildInProgressTab(),
-                  _buildNextActionTab(),
-                  _buildDelegatedTab(),
-                ],
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: Column(
+        children: [
+          // Tab bar section
+          Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: const Color(0xFF2563EB),
+                borderRadius: BorderRadius.circular(8),
               ),
-            )
-          : _buildLoginPrompt(),
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              labelColor: Colors.white,
+              unselectedLabelColor: const Color(0xFF64748B),
+              labelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
+              tabs: const [
+                Tab(text: '📅 기한지남'),
+                Tab(text: '🔄 진행중'),
+                Tab(text: '⏭️ 다음행동'),
+                Tab(text: '👥 위임'),
+              ],
+            ),
+          ),
+          // Content section
+          Expanded(
+            child: _isAuthenticated
+                ? TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildOverdueTab(),
+                      _buildInProgressTab(),
+                      _buildNextActionTab(),
+                      _buildDelegatedTab(),
+                    ],
+                  )
+                : _buildLoginPrompt(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -449,7 +516,11 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Container(
-          height: MediaQuery.of(context).size.height - 200,
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height > 400
+              ? MediaQuery.of(context).size.height - 400
+              : 200,
+          ),
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -611,62 +682,158 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   }
 
   Widget _buildTaskCard(NotionTask task) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: _getStatusColor(task.status),
-          child: Icon(
-            _getStatusIcon(task.status),
-        color: Colors.white,
-            size: 20,
+    final isOverdue = task.dueDate != null &&
+                     task.dueDate!.isBefore(DateTime.now()) &&
+                     !task.isCompleted;
+
+    return GestureDetector(
+      onTap: () => _showTaskDetailDialog(task),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isOverdue
+                ? const Color(0xFFEF4444)
+                : task.isCompleted
+                    ? const Color(0xFF22C55E)
+                    : const Color(0xFFE2E8F0),
+            width: task.isCompleted || isOverdue ? 2 : 1,
           ),
-        ),
-        title: Text(
-          task.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-            if (task.description != null && task.description!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  task.description!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-            if (task.dueDate != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.schedule,
-                      size: 14,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 4),
-            Text(
-                      _formatDate(task.dueDate!),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(task.status),
+                    shape: BoxShape.circle,
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(task.status).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    task.status ?? '미지정',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: _getStatusColor(task.status),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (isOverdue)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      '지연',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                Icon(
+                  task.isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: task.isCompleted ? const Color(0xFF22C55E) : const Color(0xFF94A3B8),
+                  size: 20,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              task.title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: task.isCompleted ? const Color(0xFF64748B) : const Color(0xFF1E293B),
+                decoration: task.isCompleted ? TextDecoration.lineThrough : null,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (task.description != null && task.description!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                task.description!,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: task.isCompleted ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (task.dueDate != null) ...[
+                  Icon(
+                    Icons.schedule,
+                    size: 16,
+                    color: isOverdue
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatDate(task.dueDate!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isOverdue
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                if (task.clarification != null && task.clarification!.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      task.clarification!,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2563EB),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
-        trailing: task.isCompleted
-            ? const Icon(Icons.check_circle, color: Colors.green)
-            : const Icon(Icons.radio_button_unchecked),
-        onTap: () => _showDatePickerDialog(task),
       ),
     );
   }
@@ -757,7 +924,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date).inDays;
-    
+
     if (difference == 0) {
       return '오늘';
     } else if (difference == 1) {
@@ -767,5 +934,456 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     } else {
       return '${date.month}/${date.day}';
     }
+  }
+}
+
+/// 할일 상세보기 위젯
+class _TaskDetailView extends StatefulWidget {
+  final NotionTask task;
+  final Function(NotionTask) onUpdate;
+  final VoidCallback onClose;
+
+  const _TaskDetailView({
+    required this.task,
+    required this.onUpdate,
+    required this.onClose,
+  });
+
+  @override
+  State<_TaskDetailView> createState() => _TaskDetailViewState();
+}
+
+class _TaskDetailViewState extends State<_TaskDetailView> {
+  final NotionAuthService _authService = NotionAuthService();
+  late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
+  bool _isCompleted = false;
+  bool _isEditing = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.task.title);
+    _descriptionController = TextEditingController(text: widget.task.description ?? '');
+    _isCompleted = widget.task.isCompleted;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveChanges() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final properties = <String, dynamic>{};
+
+      if (_titleController.text != widget.task.title) {
+        properties['Name'] = {
+          'title': [
+            {
+              'text': {
+                'content': _titleController.text,
+              }
+            }
+          ]
+        };
+      }
+
+      if (_descriptionController.text != (widget.task.description ?? '')) {
+        properties['상세설명'] = {
+          'rich_text': [
+            {
+              'text': {
+                'content': _descriptionController.text,
+              }
+            }
+          ]
+        };
+      }
+
+      if (_isCompleted != widget.task.isCompleted) {
+        properties['완료'] = {
+          'checkbox': _isCompleted,
+        };
+      }
+
+      if (properties.isNotEmpty) {
+        await _authService.apiService!.updatePage(widget.task.id, properties);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('성공적으로 저장되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
+      setState(() {
+        _isEditing = false;
+      });
+
+      widget.onUpdate(widget.task);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('저장에 실패했습니다: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status) {
+      case '진행중':
+        return Colors.blue;
+      case '완료':
+        return Colors.green;
+      case '대기':
+        return Colors.orange;
+      case '다음행동':
+        return Colors.purple;
+      case '위임':
+        return Colors.teal;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // 헤더
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Color(0xFF2563EB),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.description,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                '할일 상세보기',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: widget.onClose,
+                icon: const Icon(
+                  Icons.close,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 내용
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 상태 및 완료 체크박스
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(widget.task.status).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        widget.task.status ?? '미지정',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _getStatusColor(widget.task.status),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _isCompleted,
+                          onChanged: _isEditing ? (value) {
+                            setState(() {
+                              _isCompleted = value ?? false;
+                            });
+                          } : null,
+                          activeColor: const Color(0xFF22C55E),
+                        ),
+                        Text(
+                          '완료',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _isCompleted
+                                ? const Color(0xFF22C55E)
+                                : const Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // 제목
+                const Text(
+                  '제목',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _titleController,
+                  enabled: _isEditing,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1E293B),
+                  ),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                    ),
+                    disabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
+                    ),
+                    filled: true,
+                    fillColor: _isEditing ? Colors.white : const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                  maxLines: 2,
+                ),
+
+                const SizedBox(height: 20),
+
+                // 상세설명
+                const Text(
+                  '상세설명',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _descriptionController,
+                  enabled: _isEditing,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1E293B),
+                  ),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                    ),
+                    disabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
+                    ),
+                    filled: true,
+                    fillColor: _isEditing ? Colors.white : const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.all(12),
+                    hintText: '상세설명을 입력해주세요',
+                  ),
+                  maxLines: 6,
+                ),
+
+                const SizedBox(height: 20),
+
+                // 추가 정보
+                if (widget.task.dueDate != null) ...[
+                  const Text(
+                    '마감일',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          size: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${widget.task.dueDate!.year}-${widget.task.dueDate!.month.toString().padLeft(2, '0')}-${widget.task.dueDate!.day.toString().padLeft(2, '0')}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                if (widget.task.clarification != null && widget.task.clarification!.isNotEmpty) ...[
+                  const Text(
+                    '명료화',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
+                    ),
+                    child: Text(
+                      widget.task.clarification!,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF2563EB),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        // 버튼들
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+          ),
+          child: Row(
+            children: [
+              if (!_isEditing) ...[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _isEditing = true;
+                      });
+                    },
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('수정'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Expanded(
+                  child: TextButton(
+                    onPressed: _isLoading ? null : () {
+                      setState(() {
+                        _isEditing = false;
+                        _titleController.text = widget.task.title;
+                        _descriptionController.text = widget.task.description ?? '';
+                        _isCompleted = widget.task.isCompleted;
+                      });
+                    },
+                    child: const Text('취소'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _saveChanges,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save, size: 18),
+                    label: Text(_isLoading ? '저장 중...' : '저장'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF22C55E),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

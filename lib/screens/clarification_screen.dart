@@ -1062,7 +1062,11 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Container(
-            height: MediaQuery.of(context).size.height - 200,
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height > 300
+                ? MediaQuery.of(context).size.height - 200
+                : 100,
+            ),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1107,7 +1111,11 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Container(
-            height: MediaQuery.of(context).size.height - 200,
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height > 300
+                ? MediaQuery.of(context).size.height - 200
+                : 100,
+            ),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

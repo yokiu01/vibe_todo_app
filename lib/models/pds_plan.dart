@@ -62,17 +62,30 @@ class PDSPlan {
   }
 
   static String _mapToJson(Map<String, String> map) {
-    return map.entries.map((e) => '${e.key}:${e.value}').join('|');
+    return map.entries.map((e) => '${e.key}=${e.value}').join('&');
   }
 
   static Map<String, String> _jsonToMap(String json) {
     if (json.isEmpty) return {};
     final Map<String, String> result = {};
-    final entries = json.split('|');
-    for (final entry in entries) {
-      final parts = entry.split(':');
-      if (parts.length >= 2) {
-        result[parts[0]] = parts.sublist(1).join(':');
+
+    // 기존 형식(콜론과 파이프) 지원을 위한 migration
+    if (json.contains('|') && json.contains(':')) {
+      final entries = json.split('|');
+      for (final entry in entries) {
+        final parts = entry.split(':');
+        if (parts.length >= 2) {
+          result[parts[0]] = parts.sublist(1).join(':');
+        }
+      }
+    } else {
+      // 새로운 형식(등호와 앰퍼샌드)
+      final entries = json.split('&');
+      for (final entry in entries) {
+        final parts = entry.split('=');
+        if (parts.length >= 2) {
+          result[parts[0]] = parts.sublist(1).join('=');
+        }
       }
     }
     return result;

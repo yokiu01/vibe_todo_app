@@ -70,14 +70,20 @@ class NotionTask {
       title = '제목 없음';
     }
     
-    // 설명 추출 (safe parsing)
+    // 설명 추출 (safe parsing) - 여러 가능한 속성명 시도
     String? description;
     try {
-      final descriptionProperty = properties['description'];
-      if (descriptionProperty is Map && descriptionProperty['rich_text'] is List) {
-        final richTextArray = descriptionProperty['rich_text'] as List;
-        if (richTextArray.isNotEmpty && richTextArray[0] is Map && richTextArray[0]['text'] is Map) {
-          description = richTextArray[0]['text']['content']?.toString();
+      // description, content, 설명 등 여러 속성명 시도
+      for (String key in ['description', 'content', '설명', '내용']) {
+        if (properties[key] != null) {
+          final descProperty = properties[key];
+          if (descProperty is Map && descProperty['rich_text'] is List) {
+            final richTextArray = descProperty['rich_text'] as List;
+            if (richTextArray.isNotEmpty && richTextArray[0] is Map && richTextArray[0]['text'] is Map) {
+              description = richTextArray[0]['text']['content']?.toString();
+              if (description != null && description.isNotEmpty) break;
+            }
+          }
         }
       }
     } catch (e) {
@@ -110,13 +116,19 @@ class NotionTask {
       print('명료화 추출 오류: $e');
     }
     
-    // 상태 추출 (safe parsing)
+    // 상태 추출 (safe parsing) - 여러 가능한 속성명 시도
     String? status;
     try {
-      final statusProperty = properties['status'];
-      if (statusProperty is Map && statusProperty['select'] is Map) {
-        final selectObj = statusProperty['select'] as Map;
-        status = selectObj['name']?.toString();
+      // status, 상태, 명료화 등 여러 속성명 시도
+      for (String key in ['status', '상태', '명료화']) {
+        if (properties[key] != null) {
+          final statusProperty = properties[key];
+          if (statusProperty is Map && statusProperty['select'] is Map) {
+            final selectObj = statusProperty['select'] as Map;
+            status = selectObj['name']?.toString();
+            if (status != null && status.isNotEmpty) break;
+          }
+        }
       }
     } catch (e) {
       print('상태 추출 오류: $e');

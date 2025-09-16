@@ -12,14 +12,36 @@ class LockScreenOverlay extends StatefulWidget {
   State<LockScreenOverlay> createState() => _LockScreenOverlayState();
 }
 
-class _LockScreenOverlayState extends State<LockScreenOverlay> {
+class _LockScreenOverlayState extends State<LockScreenOverlay>
+    with TickerProviderStateMixin {
   DateTime _selectedDate = DateTime.now();
   bool _isVisible = true;
+  late AnimationController _slideController;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeInOut,
+    ));
+
     _checkLockScreenSettings();
+    _slideController.forward();
+  }
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkLockScreenSettings() async {
@@ -29,11 +51,11 @@ class _LockScreenOverlayState extends State<LockScreenOverlay> {
     }
   }
 
-  void _dismiss() {
-    setState(() {
-      _isVisible = false;
-    });
-    Navigator.of(context).pop();
+  Future<void> _dismiss() async {
+    await _slideController.reverse();
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -42,28 +64,47 @@ class _LockScreenOverlayState extends State<LockScreenOverlay> {
 
     return Material(
       color: Colors.black54,
-      child: SafeArea(
+      child: GestureDetector(
+        onVerticalDragEnd: (details) {
+          // 위로 스와이프하면 닫기
+          if (details.primaryVelocity != null && details.primaryVelocity! < -1000) {
+            _dismiss();
+          }
+        },
+        onTap: () => _dismiss(), // 배경 터치로 닫기
         child: Container(
-          margin: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 20,
-                spreadRadius: 5,
+          width: double.infinity,
+          height: double.infinity,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: SafeArea(
+              child: Container(
+                margin: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: GestureDetector(
+                  onTap: () {}, // 내부 터치는 닫지 않음
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeader(),
+                      Expanded(
+                        child: _buildContent(),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHeader(),
-              Expanded(
-                child: _buildContent(),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -72,7 +113,6 @@ class _LockScreenOverlayState extends State<LockScreenOverlay> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
         color: Color(0xFF2563EB),
         borderRadius: BorderRadius.only(
@@ -80,22 +120,39 @@ class _LockScreenOverlayState extends State<LockScreenOverlay> {
           topRight: Radius.circular(16),
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          const Text(
-            '📅 오늘의 계획 & 실행',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+          // 슬라이드 인디케이터
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(top: 8, bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const Spacer(),
-          IconButton(
-            onPressed: _dismiss,
-            icon: const Icon(
-              Icons.close,
-              color: Colors.white,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                const Text(
+                  '📅 오늘의 계획 & 실행',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: _dismiss,
+                  icon: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

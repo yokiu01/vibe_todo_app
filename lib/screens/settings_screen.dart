@@ -12,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final NotionApiService _notionService = NotionApiService();
   bool _lockScreenEnabled = false;
+  bool _hasOverlayPermission = false;
   bool _isLoading = false;
   String? _currentApiKey;
 
@@ -28,10 +29,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final lockScreenEnabled = await LockScreenService.isLockScreenEnabled();
+      final hasOverlayPermission = await LockScreenService.hasOverlayPermission();
       final apiKey = await _notionService.getApiKey();
 
       setState(() {
         _lockScreenEnabled = lockScreenEnabled;
+        _hasOverlayPermission = hasOverlayPermission;
         _currentApiKey = apiKey;
       });
     } catch (e) {
@@ -44,6 +47,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _toggleLockScreen(bool value) async {
+    if (value && !_hasOverlayPermission) {
+      // 권한이 없으면 권한 요청
+      await _requestOverlayPermission();
+      return;
+    }
+
     try {
       await LockScreenService.setLockScreenEnabled(value);
       setState(() {
@@ -54,6 +63,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     } catch (e) {
       _showSnackBar('설정 변경 실패: $e', isError: true);
+    }
+  }
+
+  Future<void> _requestOverlayPermission() async {
+    final bool? shouldRequest = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('오버레이 권한 필요'),
+        content: const Text(
+          '잠금화면에 앱 내용을 표시하려면 "다른 앱 위에 그리기" 권한이 필요합니다.\n\n'
+          '설정으로 이동하여 권한을 허용해주세요.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('설정으로 이동'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRequest == true) {
+      await LockScreenService.requestOverlayPermission();
+      // 권한 요청 후 잠시 기다렸다가 다시 확인
+      Future.delayed(const Duration(seconds: 1), () async {
+        final hasPermission = await LockScreenService.hasOverlayPermission();
+        setState(() {
+          _hasOverlayPermission = hasPermission;
+        });
+        if (hasPermission) {
+          _toggleLockScreen(true);
+        }
+      });
+    }
+  }
+
+  Future<void> _testOverlay() async {
+    try {
+      await LockScreenService.showOverlayManually();
+      _showSnackBar('오버레이 테스트가 실행되었습니다.');
+    } catch (e) {
+      _showSnackBar('오버레이 테스트 실패: $e', isError: true);
     }
   }
 
@@ -219,14 +274,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildSettingTile(
                         icon: Icons.lock_open,
                         title: '잠금화면 오버레이',
-                        subtitle: '앱 재시작 시 PDS Do-See 내용 표시',
+                        subtitle: _hasOverlayPermission
+                            ? '화면 켜짐 시 PDS Do-See 내용 표시'
+                            : '오버레이 권한이 필요합니다',
                         trailing: Switch(
-                          value: _lockScreenEnabled,
+                          value: _lockScreenEnabled && _hasOverlayPermission,
                           onChanged: _toggleLockScreen,
                           activeColor: const Color(0xFF2563EB),
                         ),
                         onTap: () => _toggleLockScreen(!_lockScreenEnabled),
                       ),
+                      if (!_hasOverlayPermission) ...[
+                        const Divider(),
+                        _buildSettingTile(
+                          icon: Icons.security,
+                          title: '오버레이 권한 요청',
+                          subtitle: '다른 앱 위에 그리기 권한 설정',
+                          iconColor: Colors.orange,
+                          onTap: _requestOverlayPermission,
+                        ),
+                      ],
+                      if (_hasOverlayPermission && _lockScreenEnabled) ...[
+                        const Divider(),
+                        _buildSettingTile(
+                          icon: Icons.play_arrow,
+                          title: '오버레이 테스트',
+                          subtitle: '잠금화면 오버레이 미리보기',
+                          iconColor: Colors.green,
+                          onTap: _testOverlay,
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 16),

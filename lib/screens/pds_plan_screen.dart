@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +20,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   DateTime _selectedDate = DateTime.now();
   Map<String, String> _freeformPlans = {};
   Map<String, TextEditingController> _planControllers = {};
+  Timer? _debounceTimer;
 
   List<NotionTask> _notionTasks = [];
   bool _isLoadingNotionTasks = false;
@@ -39,6 +41,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   @override
   void dispose() {
     _planControllers.values.forEach((controller) => controller.dispose());
+    _debounceTimer?.cancel();
     super.dispose();
   }
 
@@ -50,10 +53,19 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   }
 
   void _loadCurrentPlan() {
+    print('PDS PLAN: _loadCurrentPlan 호출 - 날짜: ${_selectedDate.toIso8601String().split('T')[0]}');
+
     final pdsProvider = context.read<PDSDiaryProvider>();
     final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
 
+    print('PDS PLAN: 현재 계획 존재 여부: ${currentPlan != null}');
+
+    // 먼저 모든 컨트롤러를 초기화
+    _planControllers.values.forEach((controller) => controller.clear());
+
     if (currentPlan != null) {
+      print('PDS PLAN: 기존 계획 데이터: ${currentPlan.freeformPlans}');
+
       setState(() {
         _freeformPlans = currentPlan.freeformPlans ?? {};
       });
@@ -62,15 +74,17 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
       _freeformPlans.forEach((key, value) {
         if (_planControllers.containsKey(key)) {
           _planControllers[key]!.text = value;
+          print('PDS PLAN: 컨트롤러 업데이트 - $key: $value');
         }
       });
     } else {
-      // Clear controllers for new date
-      _planControllers.values.forEach((controller) => controller.clear());
+      print('PDS PLAN: 새로운 날짜 - 컨트롤러 초기화');
       setState(() {
         _freeformPlans = {};
       });
     }
+
+    print('PDS PLAN: _loadCurrentPlan 완료 - _freeformPlans: $_freeformPlans');
   }
 
   @override
@@ -105,14 +119,21 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
     );
 
     if (selectedDate != null && selectedDate != _selectedDate) {
+      print('PDS PLAN: 날짜 변경 - ${_selectedDate.toIso8601String().split('T')[0]} -> ${selectedDate.toIso8601String().split('T')[0]}');
+
       setState(() {
         _selectedDate = selectedDate;
       });
+
       // 날짜가 변경되면 해당 날짜의 데이터 로드
-      context.read<PDSDiaryProvider>().loadPDSPlans();
-      context.read<ItemProvider>().loadItems();
+      await context.read<PDSDiaryProvider>().loadPDSPlans();
+      await context.read<ItemProvider>().loadItems();
+
+      // 강제로 다시 로드
       _loadCurrentPlan();
-      _loadNotionTasks();
+      await _loadNotionTasks();
+
+      print('PDS PLAN: 날짜 변경 완료');
     }
   }
 
@@ -745,11 +766,29 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         style: const TextStyle(fontSize: 12),
         maxLines: 2,
         onChanged: (value) {
+          print('PDS PLAN: onChanged 호출 - ${slot.key}: $value');
+
           setState(() {
             _freeformPlans[slot.key] = value;
           });
+
+          // 실시간 저장을 위한 디바운싱
+          _debounceTimer?.cancel();
+          _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+            _saveFreeformPlan(slot.key, value);
+          });
         },
         onSubmitted: (value) {
+          print('PDS PLAN: onSubmitted 호출 - ${slot.key}: $value');
+
+          _debounceTimer?.cancel();
+          _saveFreeformPlan(slot.key, value);
+        },
+        onEditingComplete: () {
+          print('PDS PLAN: onEditingComplete 호출 - ${slot.key}');
+
+          _debounceTimer?.cancel();
+          final value = _planControllers[slot.key]?.text ?? '';
           _saveFreeformPlan(slot.key, value);
         },
       ),
@@ -857,23 +896,28 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
 
   Future<void> _saveFreeformPlan(String timeSlot, String content) async {
     try {
+      print('PDS PLAN: Plan 저장 시작 - ${_selectedDate.toIso8601String().split('T')[0]} $timeSlot: $content');
+
       // PDSDiaryProvider를 통해 저장
       await context.read<PDSDiaryProvider>().saveFreeformPlan(
         _selectedDate,
         timeSlot,
         content,
       );
-      
+
+      print('PDS PLAN: Plan 저장 완료');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Plan이 저장되었습니다'),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+            duration: Duration(seconds: 1),
           ),
         );
       }
     } catch (e) {
+      print('PDS PLAN: Plan 저장 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

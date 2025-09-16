@@ -48,21 +48,33 @@ class PDSDiaryProvider with ChangeNotifier {
   }) async {
     try {
       final existingPlan = getPDSPlan(date);
-      
+
+      print('PDSDiaryProvider: createOrUpdatePDSPlan - 기존 계획: ${existingPlan != null}');
+
       if (existingPlan != null) {
+        print('PDSDiaryProvider: 기존 계획 업데이트');
+
         final updatedPlan = await _databaseService.updatePDSPlan(existingPlan.id, {
           'freeform_plans': freeformPlans != null ? _mapToJson(freeformPlans) : existingPlan.freeformPlans != null ? _mapToJson(existingPlan.freeformPlans!) : null,
           'actual_activities': actualActivities != null ? _mapToJson(actualActivities) : existingPlan.actualActivities != null ? _mapToJson(existingPlan.actualActivities!) : null,
           'see_notes': seeNotes ?? existingPlan.seeNotes,
         });
-        
+
         final index = _pdsPlans.indexWhere((plan) => plan.id == existingPlan.id);
         if (index != -1) {
           _pdsPlans[index] = updatedPlan;
+          print('PDSDiaryProvider: 로컬 데이터 업데이트 완료');
+        } else {
+          print('PDSDiaryProvider: 인덱스를 찾을 수 없음, 리스트에 추가');
+          _pdsPlans.add(updatedPlan);
         }
+
         notifyListeners();
+        print('PDSDiaryProvider: notifyListeners 호출');
         return updatedPlan;
       } else {
+        print('PDSDiaryProvider: 새로운 계획 생성');
+
         final newPlan = PDSPlan(
           id: Helpers.generateId(),
           date: date,
@@ -72,13 +84,15 @@ class PDSDiaryProvider with ChangeNotifier {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        
+
         final createdPlan = await _databaseService.createPDSPlan(newPlan);
         _pdsPlans.add(createdPlan);
         notifyListeners();
+        print('PDSDiaryProvider: 새 계획 생성 완료');
         return createdPlan;
       }
     } catch (e) {
+      print('PDSDiaryProvider: createOrUpdatePDSPlan 오류: $e');
       _error = e.toString();
       notifyListeners();
       rethrow;
@@ -115,17 +129,30 @@ class PDSDiaryProvider with ChangeNotifier {
   }
 
   String _mapToJson(Map<String, String> map) {
-    return map.entries.map((e) => '${e.key}:${e.value}').join('|');
+    return map.entries.map((e) => '${e.key}=${e.value}').join('&');
   }
 
   Map<String, String> _jsonToMap(String json) {
     if (json.isEmpty) return {};
     final Map<String, String> result = {};
-    final entries = json.split('|');
-    for (final entry in entries) {
-      final parts = entry.split(':');
-      if (parts.length >= 2) {
-        result[parts[0]] = parts.sublist(1).join(':');
+
+    // 기존 형식(콜론과 파이프) 지원을 위한 migration
+    if (json.contains('|') && json.contains(':')) {
+      final entries = json.split('|');
+      for (final entry in entries) {
+        final parts = entry.split(':');
+        if (parts.length >= 2) {
+          result[parts[0]] = parts.sublist(1).join(':');
+        }
+      }
+    } else {
+      // 새로운 형식(등호와 앰퍼샌드)
+      final entries = json.split('&');
+      for (final entry in entries) {
+        final parts = entry.split('=');
+        if (parts.length >= 2) {
+          result[parts[0]] = parts.sublist(1).join('=');
+        }
       }
     }
     return result;
@@ -138,25 +165,134 @@ class PDSDiaryProvider with ChangeNotifier {
 
   Future<void> saveFreeformPlan(DateTime date, String timeSlot, String content) async {
     try {
+      print('PDSDiaryProvider: saveFreeformPlan 호출 - ${date.toIso8601String().split('T')[0]} $timeSlot: $content');
+
       final existingPlan = getPDSPlan(date);
       Map<String, String> freeformPlans = {};
-      
+
       if (existingPlan != null && existingPlan.freeformPlans != null) {
         freeformPlans = Map<String, String>.from(existingPlan.freeformPlans!);
       }
-      
-      freeformPlans[timeSlot] = content;
-      
-      await createOrUpdatePDSPlan(
+
+      if (content.trim().isEmpty) {
+        freeformPlans.remove(timeSlot);
+      } else {
+        freeformPlans[timeSlot] = content.trim();
+      }
+
+      print('PDSDiaryProvider: 업데이트할 freeformPlans: $freeformPlans');
+
+      final updatedPlan = await createOrUpdatePDSPlan(
         date: date,
         freeformPlans: freeformPlans,
         actualActivities: existingPlan?.actualActivities,
         seeNotes: existingPlan?.seeNotes,
       );
-      
-      // 로컬 데이터도 업데이트
-      await loadPDSPlans();
+
+      print('PDSDiaryProvider: PDS 계획 저장 완료');
+      print('PDSDiaryProvider: 저장된 계획 데이터: ${updatedPlan.freeformPlans}');
+
+      // 저장 즉시 로컬 데이터 강제 업데이트
+      final index = _pdsPlans.indexWhere((plan) =>
+        plan.date.toIso8601String().split('T')[0] == date.toIso8601String().split('T')[0]);
+
+      if (index != -1) {
+        _pdsPlans[index] = updatedPlan;
+      } else {
+        _pdsPlans.add(updatedPlan);
+      }
+
+      // 변경 알림
+      notifyListeners();
+      print('PDSDiaryProvider: 데이터 업데이트 및 알림 완료');
     } catch (e) {
+      print('PDSDiaryProvider: saveFreeformPlan 오류: $e');
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> saveActualActivity(DateTime date, String timeSlot, String content) async {
+    try {
+      print('PDSDiaryProvider: saveActualActivity 호출 - ${date.toIso8601String().split('T')[0]} $timeSlot: $content');
+
+      final existingPlan = getPDSPlan(date);
+      Map<String, String> actualActivities = {};
+
+      if (existingPlan != null && existingPlan.actualActivities != null) {
+        actualActivities = Map<String, String>.from(existingPlan.actualActivities!);
+      }
+
+      if (content.trim().isEmpty) {
+        actualActivities.remove(timeSlot);
+      } else {
+        actualActivities[timeSlot] = content.trim();
+      }
+
+      print('PDSDiaryProvider: 업데이트할 actualActivities: $actualActivities');
+
+      final updatedPlan = await createOrUpdatePDSPlan(
+        date: date,
+        freeformPlans: existingPlan?.freeformPlans,
+        actualActivities: actualActivities,
+        seeNotes: existingPlan?.seeNotes,
+      );
+
+      print('PDSDiaryProvider: 실제 활동 저장 완료');
+      print('PDSDiaryProvider: 저장된 실제 활동 데이터: ${updatedPlan.actualActivities}');
+
+      // 저장 즉시 로컬 데이터 강제 업데이트
+      final index = _pdsPlans.indexWhere((plan) =>
+        plan.date.toIso8601String().split('T')[0] == date.toIso8601String().split('T')[0]);
+
+      if (index != -1) {
+        _pdsPlans[index] = updatedPlan;
+      } else {
+        _pdsPlans.add(updatedPlan);
+      }
+
+      // 변경 알림
+      notifyListeners();
+      print('PDSDiaryProvider: 실제 활동 데이터 업데이트 및 알림 완료');
+    } catch (e) {
+      print('PDSDiaryProvider: saveActualActivity 오류: $e');
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> saveSeeNotes(DateTime date, String notes) async {
+    try {
+      print('PDSDiaryProvider: saveSeeNotes 호출 - ${date.toIso8601String().split('T')[0]}: $notes');
+
+      final existingPlan = getPDSPlan(date);
+
+      final updatedPlan = await createOrUpdatePDSPlan(
+        date: date,
+        freeformPlans: existingPlan?.freeformPlans,
+        actualActivities: existingPlan?.actualActivities,
+        seeNotes: notes.trim().isEmpty ? null : notes.trim(),
+      );
+
+      print('PDSDiaryProvider: 회고 노트 저장 완료');
+
+      // 저장 즉시 로컬 데이터 강제 업데이트
+      final index = _pdsPlans.indexWhere((plan) =>
+        plan.date.toIso8601String().split('T')[0] == date.toIso8601String().split('T')[0]);
+
+      if (index != -1) {
+        _pdsPlans[index] = updatedPlan;
+      } else {
+        _pdsPlans.add(updatedPlan);
+      }
+
+      // 변경 알림
+      notifyListeners();
+      print('PDSDiaryProvider: 회고 노트 데이터 업데이트 및 알림 완료');
+    } catch (e) {
+      print('PDSDiaryProvider: saveSeeNotes 오류: $e');
       _error = e.toString();
       notifyListeners();
       rethrow;

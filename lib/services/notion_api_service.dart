@@ -11,7 +11,7 @@ class NotionApiService {
   static const String MEMO_DB_ID = '1159f5e4a81180e3a9f2fdf6634730e6';
   static const String PROJECT_DB_ID = '1159f5e4a81180019f29cdd24d369230';
   static const String GOAL_DB_ID = '1159f5e4a81180d092add53ae9df7f05';
-  static const String AREA_RESOURCE_DB_ID = '1159f5e4a81180d1ab17fa79bb0cf0f4';
+  static const String AREA_RESOURCE_DB_ID = '1159f5e4a81180e39c16c6e30be0e46e'; // 이 ID는 존재하지 않음
   
   static const String _apiKeyKey = 'notion_api_key';
   
@@ -560,5 +560,97 @@ class NotionApiService {
       AREA_RESOURCE_DB_ID, // 영역 · 자원 데이터베이스
     ];
     return allowedDatabases.contains(databaseId);
+  }
+
+  /// 페이지에 블록 추가 (Append Block Children)
+  Future<Map<String, dynamic>> appendBlockChildren(
+    String pageId,
+    List<Map<String, dynamic>> blocks,
+  ) async {
+    final headers = await _getHeaders();
+    final url = '$baseUrl/blocks/$pageId/children';
+
+    final body = jsonEncode(<String, dynamic>{
+      'children': blocks,
+    });
+
+    final response = await http.patch(
+      Uri.parse(url),
+      headers: headers,
+      body: body,
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception('블록 추가 실패 (${response.statusCode}): ${errorBody['message'] ?? response.body}');
+    }
+  }
+
+  /// 페이지의 블록 내용 조회
+  Future<List<Map<String, dynamic>>> getBlockChildren(String pageId) async {
+    final headers = await _getHeaders();
+    final url = '$baseUrl/blocks/$pageId/children';
+
+    final response = await http.get(
+      Uri.parse(url),
+      headers: headers,
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return List<Map<String, dynamic>>.from(data['results'] ?? []);
+    } else {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception('블록 조회 실패 (${response.statusCode}): ${errorBody['message'] ?? response.body}');
+    }
+  }
+
+  /// 텍스트 블록 생성 헬퍼 메서드
+  Map<String, dynamic> createParagraphBlock(String text) {
+    return <String, dynamic>{
+      'object': 'block',
+      'type': 'paragraph',
+      'paragraph': <String, dynamic>{
+        'rich_text': [
+          <String, dynamic>{
+            'type': 'text',
+            'text': <String, dynamic>{
+              'content': text,
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  /// 오늘 수집한 항목들 조회 (MEMO_DB_ID에서 오늘 생성된 항목들)
+  Future<List<Map<String, dynamic>>> getTodayCollectedItems() async {
+    try {
+      // 모든 항목을 가져온 후 클라이언트에서 오늘 생성된 것만 필터링
+      final allItems = await queryDatabase(MEMO_DB_ID, null);
+      
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final tomorrow = today.add(const Duration(days: 1));
+      
+      // 오늘 생성된 항목들만 필터링
+      final todayItems = allItems.where((item) {
+        final createdTime = item['created_time'] as String?;
+        if (createdTime == null) return false;
+        
+        final created = DateTime.tryParse(createdTime);
+        if (created == null) return false;
+        
+        return created.isAfter(today.subtract(const Duration(seconds: 1))) && 
+               created.isBefore(tomorrow);
+      }).toList();
+      
+      return todayItems;
+    } catch (e) {
+      print('getTodayCollectedItems 오류: $e');
+      rethrow;
+    }
   }
 }

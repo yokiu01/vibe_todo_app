@@ -39,7 +39,21 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
       setState(() {
         _selectedCategory = _tabs[_tabController.index].text!;
       });
-      _loadArchivedItems();
+      
+      // 탭에 따라 다른 데이터 로드
+      switch (_selectedCategory) {
+        case '목표 나침반':
+          _loadGoalCompassData();
+          break;
+        case '노트 관리함':
+          _loadNoteManagerData();
+          break;
+        case '아이스박스':
+          _loadIceBoxData();
+          break;
+        default:
+          _loadArchivedItems();
+      }
     }
   }
 
@@ -66,73 +80,207 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
     });
   }
 
-  /// 아카이브된 항목들 로드
+  /// 아카이브된 항목들 로드 (전체)
   Future<void> _loadArchivedItems() async {
     if (!_isAuthenticated) return;
-    
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      List<Map<String, dynamic>> items = [];
+      print('아카이브: 모든 데이터베이스에서 데이터 로드 시작');
       
-      // 선택된 카테고리에 따라 다른 데이터베이스에서 로드
-      switch (_selectedCategory) {
-        case '완료된 할일':
-          items = await _authService.apiService!.queryDatabase(
-            '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
-            <String, dynamic>{
-              'property': '완료',
-              'checkbox': <String, dynamic>{
-                'equals': true,
-              }
-            },
-          );
-          break;
-        case '보관된 메모':
-          items = await _authService.apiService!.queryDatabase('1159f5e4a81180e3a9f2fdf6634730e6', null);
-          break;
-        case '아이디어':
-        case '읽을거리':
-        case '취미':
-          items = await _authService.apiService!.queryDatabase('1159f5e4a81180e3a9f2fdf6634730e6', null);
-          break;
-        case '언젠가':
-          items = await _authService.apiService!.queryDatabase(
-            '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
-            <String, dynamic>{
-              'property': '명료화',
-              'select': <String, dynamic>{
-                'equals': '언젠가',
-              }
-            },
-          );
-          break;
-        case '전체':
-        default:
-          // 모든 데이터베이스에서 데이터 가져오기
-          final allItems = await Future.wait([
-            _authService.apiService!.queryDatabase('1159f5e4a81180e591cbc596ae52f611', null), // TODO_DB_ID
-            _authService.apiService!.queryDatabase('1159f5e4a81180e3a9f2fdf6634730e6', null), // MEMO_DB_ID
-            _authService.apiService!.queryDatabase('1159f5e4a81180019f29cdd24d369230', null), // PROJECT_DB_ID
-            _authService.apiService!.queryDatabase('1159f5e4a81180d092add53ae9df7f05', null), // GOAL_DB_ID
-          ]);
-          items = allItems.expand((list) => list).toList();
-          break;
+      // 모든 데이터베이스에서 데이터 가져오기 (존재하는 데이터베이스만)
+      final allItems = await Future.wait([
+        _authService.apiService!.queryDatabase('1159f5e4a81180e591cbc596ae52f611', null), // TODO_DB_ID
+        _authService.apiService!.queryDatabase('1159f5e4a81180e3a9f2fdf6634730e6', null), // MEMO_DB_ID
+        _authService.apiService!.queryDatabase('1159f5e4a81180019f29cdd24d369230', null), // PROJECT_DB_ID
+        _authService.apiService!.queryDatabase('1159f5e4a81180d092add53ae9df7f05', null), // GOAL_DB_ID
+      ]);
+
+      final items = allItems.expand((list) => list).toList();
+      print('아카이브: 전체 ${items.length}개 항목 로드됨');
+      
+      final notionTasks = items.map((item) {
+        try {
+          return NotionTask.fromNotion(item);
+        } catch (e) {
+          print('아카이브 NotionTask 변환 오류: $e');
+          return null;
+        }
+      }).where((task) => task != null).cast<NotionTask>().toList();
+
+      print('아카이브: ${notionTasks.length}개 NotionTask 생성됨');
+
+      if (mounted) {
+        setState(() {
+          _archivedItems = notionTasks;
+          _isLoading = false;
+        });
       }
-      
-      final notionTasks = items.map((item) => NotionTask.fromNotion(item)).toList();
-      
-      setState(() {
-        _archivedItems = notionTasks;
-        _isLoading = false;
-      });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showErrorSnackBar('아카이브 항목을 불러오는데 실패했습니다: $e');
+      print('아카이브 로드 오류: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showErrorSnackBar('아카이브 항목을 불러오는데 실패했습니다: $e');
+      }
+    }
+  }
+
+  /// 목표 나침반 데이터 로드
+  Future<void> _loadGoalCompassData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('목표 나침반: 데이터 로드 시작');
+
+      final List<List<Map<String, dynamic>>> allItems = [];
+
+      // GOAL_DB_ID에서 데이터 로드 (에러 처리 포함)
+      try {
+        final goalItems = await _authService.apiService!.queryDatabase('1159f5e4a81180d092add53ae9df7f05', null);
+        allItems.add(goalItems);
+        print('목표 나침반: GOAL_DB에서 ${goalItems.length}개 항목 로드됨');
+      } catch (e) {
+        print('목표 나침반: GOAL_DB 로드 실패: $e');
+        // 목표 데이터베이스 로드 실패해도 계속 진행
+      }
+
+      // PROJECT_DB_ID에서 데이터 로드 (에러 처리 포함)
+      try {
+        final projectItems = await _authService.apiService!.queryDatabase('1159f5e4a81180019f29cdd24d369230', null);
+        allItems.add(projectItems);
+        print('목표 나침반: PROJECT_DB에서 ${projectItems.length}개 항목 로드됨');
+      } catch (e) {
+        print('목표 나침반: PROJECT_DB 로드 실패: $e');
+        // 프로젝트 데이터베이스 로드 실패해도 계속 진행
+      }
+
+      final items = allItems.expand((list) => list).toList();
+      print('목표 나침반: 총 ${items.length}개 항목 로드됨');
+
+      final notionTasks = items.map((item) {
+        try {
+          return NotionTask.fromNotion(item);
+        } catch (e) {
+          print('목표 나침반 NotionTask 변환 오류: $e');
+          return null;
+        }
+      }).where((task) => task != null).cast<NotionTask>().toList();
+
+      print('목표 나침반: ${notionTasks.length}개 NotionTask 생성됨');
+
+      if (mounted) {
+        setState(() {
+          _archivedItems = notionTasks;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('목표 나침반 로드 오류: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showErrorSnackBar('목표 나침반 데이터 로드 실패: $e');
+      }
+    }
+  }
+
+  /// 노트 관리함 데이터 로드
+  Future<void> _loadNoteManagerData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('노트 관리함: 데이터 로드 시작');
+
+      final List<List<Map<String, dynamic>>> allItems = [];
+
+      // MEMO_DB_ID에서 데이터 로드 (노트 데이터베이스)
+      try {
+        final memoItems = await _authService.apiService!.queryDatabase('1159f5e4a81180e3a9f2fdf6634730e6', null);
+        allItems.add(memoItems);
+        print('노트 관리함: MEMO_DB에서 ${memoItems.length}개 항목 로드됨');
+      } catch (e) {
+        print('노트 관리함: MEMO_DB 로드 실패: $e');
+      }
+
+      // 영역·자원 데이터베이스에서도 노트 관련 데이터 로드 (올바른 DB ID 사용)
+      try {
+        final areaResourceItems = await _authService.apiService!.queryDatabase('1159f5e4a81180d1ab17fa79bb0cf0f4', null);
+        allItems.add(areaResourceItems);
+        print('노트 관리함: 영역자원DB에서 ${areaResourceItems.length}개 항목 로드됨');
+      } catch (e) {
+        print('노트 관리함: 영역자원DB 로드 실패: $e');
+        // 영역자원 데이터베이스가 접근 불가능한 경우에도 계속 진행
+      }
+
+      final items = allItems.expand((list) => list).toList();
+      print('노트 관리함: 총 ${items.length}개 항목 로드됨');
+
+      final notionTasks = items.map((item) {
+        try {
+          return NotionTask.fromNotion(item);
+        } catch (e) {
+          print('노트 관리함 NotionTask 변환 오류: $e');
+          return null;
+        }
+      }).where((task) => task != null).cast<NotionTask>().toList();
+
+      print('노트 관리함: ${notionTasks.length}개 NotionTask 생성됨');
+
+      if (mounted) {
+        setState(() {
+          _archivedItems = notionTasks;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('노트 관리함 로드 오류: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showErrorSnackBar('노트 관리함 데이터 로드 실패: $e');
+      }
+    }
+  }
+
+  /// 아이스박스 데이터 로드
+  Future<void> _loadIceBoxData() async {
+    try {
+      print('아이스박스: 데이터 로드 시작');
+      
+      // 차가운 다음행동과 언젠가 항목들 로드
+      final items = await _authService.apiService!.queryDatabase('1159f5e4a81180e591cbc596ae52f611', null); // TODO_DB_ID
+      print('아이스박스: ${items.length}개 항목 로드됨');
+      
+      final notionTasks = items.map((item) {
+        try {
+          return NotionTask.fromNotion(item);
+        } catch (e) {
+          print('아이스박스 NotionTask 변환 오류: $e');
+          return null;
+        }
+      }).where((task) => task != null).cast<NotionTask>().toList();
+
+      print('아이스박스: ${notionTasks.length}개 NotionTask 생성됨');
+
+      if (mounted) {
+        setState(() {
+          _archivedItems = notionTasks;
+        });
+      }
+    } catch (e) {
+      print('아이스박스 로드 오류: $e');
+      _showErrorSnackBar('아이스박스 데이터 로드 실패: $e');
     }
   }
 
@@ -301,11 +449,22 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('📦 아카이브'),
+        title: const Text(
+          '📦 아카이브',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1E293B),
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings, color: Color(0xFF64748B)),
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -315,18 +474,32 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
             },
             tooltip: '설정',
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isAuthenticated ? _loadArchivedItems : null,
-            tooltip: '새로고침',
-          ),
         ],
-        bottom: _isAuthenticated ? TabBar(
-          controller: _tabController,
-          tabs: _tabs,
-          labelColor: const Color(0xFF2563EB),
-          unselectedLabelColor: const Color(0xFF64748B),
-          indicatorColor: const Color(0xFF2563EB),
+        bottom: _isAuthenticated ? PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: const Color(0xFF2563EB),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              labelColor: Colors.white,
+              unselectedLabelColor: const Color(0xFF64748B),
+              labelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
+              tabs: _tabs,
+            ),
+          ),
         ) : null,
       ),
       body: _buildBody(),
@@ -340,7 +513,11 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Container(
-            height: MediaQuery.of(context).size.height - 200,
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height > 300
+                ? MediaQuery.of(context).size.height - 200
+                : 100,
+            ),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -650,94 +827,173 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
 
   // New tab builder methods
   Widget _buildGoalCompassTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionCard(
-            title: '🎯 진행 중인 목표',
-            subtitle: '현재 작업 중인 목표들',
-            items: [], // TODO: 실제 데이터 연결
-            emptyMessage: '진행 중인 목표가 없습니다.',
-          ),
-          const SizedBox(height: 16),
-          _buildSectionCard(
-            title: '💼 진행 중인 프로젝트',
-            subtitle: '현재 작업 중인 프로젝트들',
-            items: [], // TODO: 실제 데이터 연결
-            emptyMessage: '진행 중인 프로젝트가 없습니다.',
-          ),
-          const SizedBox(height: 16),
-          _buildSectionCard(
-            title: '✅ 완료된 목표',
-            subtitle: '달성한 목표들',
-            items: [], // TODO: 실제 데이터 연결
-            emptyMessage: '완료된 목표가 없습니다.',
-          ),
-          const SizedBox(height: 16),
-          _buildSectionCard(
-            title: '📁 완료된 프로젝트',
-            subtitle: '완료한 프로젝트들',
-            items: [], // TODO: 실제 데이터 연결
-            emptyMessage: '완료된 프로젝트가 없습니다.',
-          ),
-        ],
+    return RefreshIndicator(
+      onRefresh: () => _loadGoalCompassData(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionCard(
+              title: '🎯 진행 중인 목표',
+              subtitle: '현재 작업 중인 목표들',
+              items: _archivedItems.where((item) =>
+                (item.clarification?.contains('목표') == true ||
+                 item.status?.contains('목표') == true ||
+                 item.status == '목표') &&
+                (item.status?.contains('진행') == true ||
+                 item.status == '진행중' ||
+                 item.clarification?.contains('진행') == true ||
+                 !item.isCompleted)
+              ).toList(),
+              emptyMessage: '진행 중인 목표가 없습니다.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionCard(
+              title: '💼 진행 중인 프로젝트',
+              subtitle: '현재 작업 중인 프로젝트들',
+              items: _archivedItems.where((item) =>
+                (item.clarification?.contains('프로젝트') == true ||
+                 item.status?.contains('프로젝트') == true ||
+                 item.status == '프로젝트') &&
+                (item.status?.contains('진행') == true ||
+                 item.status == '진행중' ||
+                 item.clarification?.contains('진행') == true ||
+                 !item.isCompleted)
+              ).toList(),
+              emptyMessage: '진행 중인 프로젝트가 없습니다.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionCard(
+              title: '✅ 완료된 목표',
+              subtitle: '달성한 목표들',
+              items: _archivedItems.where((item) =>
+                (item.clarification?.contains('목표') == true ||
+                 item.status?.contains('목표') == true ||
+                 item.status == '목표') &&
+                (item.status?.contains('완료') == true ||
+                 item.status == '완료' ||
+                 item.isCompleted)
+              ).toList(),
+              emptyMessage: '완료된 목표가 없습니다.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionCard(
+              title: '📁 완료된 프로젝트',
+              subtitle: '완료한 프로젝트들',
+              items: _archivedItems.where((item) =>
+                (item.clarification?.contains('프로젝트') == true ||
+                 item.status?.contains('프로젝트') == true ||
+                 item.status == '프로젝트') &&
+                (item.status?.contains('완료') == true ||
+                 item.status == '완료' ||
+                 item.isCompleted)
+              ).toList(),
+              emptyMessage: '완료된 프로젝트가 없습니다.',
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildNoteManagerTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionCard(
-            title: '👀 나중에 보기',
-            subtitle: '나중에 확인할 노트들',
-            items: [], // TODO: 실제 데이터 연결
-            emptyMessage: '나중에 볼 노트가 없습니다.',
-          ),
-          const SizedBox(height: 16),
-          _buildSectionCard(
-            title: '🔧 중간 작업물',
-            subtitle: '진행 중인 작업 노트들',
-            items: [], // TODO: 실제 데이터 연결
-            emptyMessage: '중간 작업물이 없습니다.',
-          ),
-          const SizedBox(height: 16),
-          _buildSectionCard(
-            title: '📚 영역·자원',
-            subtitle: '관리 영역과 참고 자원들',
-            items: [], // TODO: 실제 데이터 연결
-            emptyMessage: '영역·자원이 없습니다.',
-          ),
-        ],
+    return RefreshIndicator(
+      onRefresh: () => _loadNoteManagerData(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionCard(
+              title: '👀 나중에 보기',
+              subtitle: '나중에 확인할 노트들',
+              items: _archivedItems.where((item) =>
+                item.clarification?.contains('나중에') == true ||
+                item.status?.contains('나중에') == true ||
+                item.clarification == '나중에 보기' ||
+                item.clarification == '나중에'
+              ).toList(),
+              emptyMessage: '나중에 볼 노트가 없습니다.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionCard(
+              title: '🔧 중간 작업물',
+              subtitle: '진행 중인 작업 노트들',
+              items: _archivedItems.where((item) =>
+                item.clarification?.contains('중간') == true ||
+                item.clarification?.contains('작업물') == true ||
+                item.status?.contains('진행') == true ||
+                item.clarification == '중간 작업물' ||
+                item.clarification?.contains('진행') == true ||
+                (item.status == '진행중' && !item.isCompleted)
+              ).toList(),
+              emptyMessage: '중간 작업물이 없습니다.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionCard(
+              title: '📚 영역·자원',
+              subtitle: '관리 영역과 참고 자원들',
+              items: _archivedItems.where((item) =>
+                item.status == '영역' ||
+                item.status == '자원' ||
+                item.clarification?.contains('영역') == true ||
+                item.clarification?.contains('자원') == true ||
+                item.status?.contains('영역') == true ||
+                item.status?.contains('자원') == true ||
+                item.clarification == '영역' ||
+                item.clarification == '자원' ||
+                item.clarification?.contains('참고') == true ||
+                item.clarification?.contains('노트') == true
+              ).toList(),
+              emptyMessage: '영역·자원이 없습니다.',
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildIceBoxTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionCard(
-            title: '🧊 차가운 다음행동',
-            subtitle: '1주일 이상 된 다음행동들',
-            items: [], // TODO: 실제 데이터 연결 (1주일 이전 다음행동)
-            emptyMessage: '차가운 다음행동이 없습니다.',
-          ),
-          const SizedBox(height: 16),
-          _buildSectionCard(
-            title: '⏰ 언젠가',
-            subtitle: '나중에 할 일들',
-            items: [], // TODO: 실제 데이터 연결 (언젠가 명료화)
-            emptyMessage: '언젠가 할 일이 없습니다.',
-          ),
-        ],
+    final oneWeekAgo = DateTime.now().subtract(const Duration(days: 7));
+
+    return RefreshIndicator(
+      onRefresh: () => _loadIceBoxData(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionCard(
+              title: '🧊 차가운 다음행동',
+              subtitle: '1주일 이상 된 다음행동들',
+              items: _archivedItems.where((item) =>
+                (item.clarification == '다음행동' ||
+                 item.clarification?.contains('다음') == true ||
+                 item.status?.contains('다음') == true) &&
+                !item.isCompleted &&
+                item.createdAt.isBefore(oneWeekAgo)
+              ).toList(),
+              emptyMessage: '차가운 다음행동이 없습니다.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionCard(
+              title: '⏰ 언젠가',
+              subtitle: '나중에 할 일들',
+              items: _archivedItems.where((item) =>
+                (item.clarification == '언젠가' ||
+                 item.clarification?.contains('언젠가') == true ||
+                 item.status?.contains('언젠가') == true ||
+                 item.status == '언젠가') &&
+                !item.isCompleted
+              ).toList(),
+              emptyMessage: '언젠가 할 일이 없습니다.',
+            ),
+          ],
+        ),
       ),
     );
   }

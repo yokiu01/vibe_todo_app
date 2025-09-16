@@ -36,8 +36,12 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
               children: [
                 _buildHeader(),
                 _buildViewSelector(),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height - 200,
+                Container(
+                  constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height > 300
+                ? MediaQuery.of(context).size.height - 200
+                : 100,
+            ),
                   child: _buildContent(),
                 ),
               ],
