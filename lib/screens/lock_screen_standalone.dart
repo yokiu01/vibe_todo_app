@@ -23,14 +23,17 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   bool _canEdit = false;
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _initializeAnimations();
     _checkEditPermission();
     _loadData();
     _setupMethodChannel();
+    _scrollToCurrentTime();
   }
 
   void _setupMethodChannel() {
@@ -93,6 +96,33 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     });
   }
 
+  void _scrollToCurrentTime() {
+    // 현재 시간에 해당하는 스크롤 위치 계산
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        final currentHour = DateTime.now().hour;
+        final timeSlots = PDSPlan.generateTimeSlots();
+        
+        // 현재 시간에 해당하는 인덱스 찾기
+        int currentIndex = 0;
+        for (int i = 0; i < timeSlots.length; i++) {
+          if (timeSlots[i].hour24 == currentHour) {
+            currentIndex = i;
+            break;
+          }
+        }
+        
+        // 스크롤 위치 계산 (각 아이템 높이 약 80px)
+        final scrollOffset = currentIndex * 80.0;
+        _scrollController.animateTo(
+          scrollOffset,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
   void _closeLockScreen() async {
     try {
       await _channel.invokeMethod('closeLockScreen');
@@ -107,6 +137,7 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
   void dispose() {
     _fadeController.dispose();
     _slideController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -131,17 +162,28 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
             opacity: _fadeAnimation,
             child: SlideTransition(
               position: _slideAnimation,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 32),
-                    _buildPlanDoSection(),
-                    const SizedBox(height: 24),
-                    _buildQuickActions(),
-                  ],
-                ),
+              child: Column(
+                children: [
+                  // 상단 헤더
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: _buildHeader(),
+                  ),
+                  const SizedBox(height: 16),
+                  // 중간 스크롤 가능한 영역
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildPlanDoSection(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // 하단 고정 버튼들
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: _buildQuickActions(),
+                  ),
+                ],
               ),
             ),
           ),
@@ -213,12 +255,8 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
         final plannedActivities = currentPlan?.freeformPlans ?? {};
         final actualActivities = currentPlan?.actualActivities ?? {};
 
-        final currentHour = DateTime.now().hour;
-        final relevantSlots = timeSlots.where((slot) {
-          return slot.hour24 >= currentHour && slot.hour24 < currentHour + 6;
-        }).toList();
-
         return Container(
+          height: 400, // 고정 높이 설정
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(16),
@@ -246,7 +284,7 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '다음 6시간의 계획',
+                      '오늘의 계획 & 실행',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -256,117 +294,135 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
                   ],
                 ),
               ),
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: relevantSlots.length,
-                separatorBuilder: (context, index) => Divider(
-                  height: 1,
-                  color: Colors.white.withOpacity(0.1),
-                ),
-                itemBuilder: (context, index) {
-                  final slot = relevantSlots[index];
-                  final planned = plannedActivities[slot.key] ?? '';
-                  final actual = actualActivities[slot.key] ?? '';
-                  final isCurrentHour = slot.hour24 == DateTime.now().hour;
+              Expanded(
+                child: ListView.separated(
+                  controller: _scrollController,
+                  itemCount: timeSlots.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: Colors.white.withOpacity(0.1),
+                  ),
+                  itemBuilder: (context, index) {
+                    final slot = timeSlots[index];
+                    final planned = plannedActivities[slot.key] ?? '';
+                    final actual = actualActivities[slot.key] ?? '';
+                    final isCurrentHour = slot.hour24 == DateTime.now().hour;
 
-                  return Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isCurrentHour
-                          ? const Color(0xFF3B82F6).withOpacity(0.1)
-                          : Colors.transparent,
-                    ),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 60,
-                          child: Text(
-                            slot.display,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isCurrentHour ? FontWeight.w600 : FontWeight.w400,
-                              color: isCurrentHour
-                                  ? const Color(0xFF60A5FA)
-                                  : Colors.white.withOpacity(0.6),
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isCurrentHour
+                            ? const Color(0xFF3B82F6).withOpacity(0.1)
+                            : Colors.transparent,
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 60,
+                            child: Text(
+                              slot.display,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: isCurrentHour ? FontWeight.w600 : FontWeight.w400,
+                                color: isCurrentHour
+                                    ? const Color(0xFF60A5FA)
+                                    : Colors.white.withOpacity(0.6),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (planned.isNotEmpty) ...[
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF3B82F6),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        planned,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w500,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (planned.isNotEmpty) ...[
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF3B82F6),
+                                          shape: BoxShape.circle,
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                if (actual.isNotEmpty) const SizedBox(height: 4),
-                              ],
-                              if (actual.isNotEmpty) ...[
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF10B981),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        '실제: $actual',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.white.withOpacity(0.8),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          planned,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              if (planned.isEmpty && actual.isEmpty)
-                                Text(
-                                  '계획된 활동 없음',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white.withOpacity(0.4),
-                                    fontStyle: FontStyle.italic,
+                                    ],
                                   ),
-                                ),
-                            ],
+                                  if (actual.isNotEmpty) const SizedBox(height: 4),
+                                ],
+                                if (actual.isNotEmpty) ...[
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF10B981),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '실제: $actual',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white.withOpacity(0.8),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                                if (planned.isEmpty && actual.isEmpty)
+                                  Text(
+                                    '계획된 활동 없음',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white.withOpacity(0.4),
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                          // DO 편집 버튼 추가
+                          if (_canEdit)
+                            GestureDetector(
+                              onTap: () => _showDoEditDialog(slot, planned, actual),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.edit,
+                                  size: 16,
+                                  color: Colors.white.withOpacity(0.7),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -421,7 +477,15 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
             child: _buildActionButton(
               icon: Icons.close,
               label: '닫기',
-              onTap: () => _closeLockScreen(),
+              onTap: () {
+                // 확실히 닫기 위해 여러 방법 시도
+                _closeLockScreen();
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context, rootNavigator: true).pop();
+                }
+              },
             ),
           ),
         ],
@@ -481,5 +545,105 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
   void _openMainApp() {
     // 메인 앱 열기 (MainActivity)
     _closeLockScreen();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  void _showDoEditDialog(TimeSlot slot, String planned, String actual) {
+    final TextEditingController actualController = TextEditingController(text: actual);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text(
+          '${slot.display} 실제 활동',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (planned.isNotEmpty) ...[
+              Text(
+                '계획: $planned',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: actualController,
+              decoration: InputDecoration(
+                hintText: '실제로 한 일을 입력하세요',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF3B82F6)),
+                ),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.1),
+              ),
+              style: const TextStyle(color: Colors.white),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              '취소',
+              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final content = actualController.text.trim();
+              try {
+                await context.read<PDSDiaryProvider>().saveActualActivity(
+                  _selectedDate,
+                  slot.key,
+                  content,
+                );
+                Navigator.of(context).pop();
+                setState(() {}); // UI 업데이트
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('실제 활동이 저장되었습니다'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('저장 실패: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text(
+              '저장',
+              style: TextStyle(color: Color(0xFF3B82F6)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
