@@ -1,0 +1,47 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield background -->
+  <path d="M256 32L48 96v160c0 80 80 160 208 208s208-128 208-208V96L256 32z" fill="#2D5A27" stroke="#1A3D1A" stroke-width="8"/>
+  
+  <!-- Calendar -->
+  <rect x="180" y="280" width="152" height="120" rx="8" fill="white" stroke="#2D5A27" stroke-width="6"/>
+  <rect x="180" y="280" width="152" height="24" rx="8" fill="#2D5A27"/>
+  <line x1="200" y1="290" x2="200" y2="300" stroke="white" stroke-width="2"/>
+  <line x1="220" y1="290" x2="220" y2="300" stroke="white" stroke-width="2"/>
+  
+  <!-- Calendar grid -->
+  <g fill="#2D5A27">
+    <rect x="190" y="310" width="20" height="20" rx="2"/>
+    <rect x="220" y="310" width="20" height="20" rx="2"/>
+    <rect x="250" y="310" width="20" height="20" rx="2"/>
+    <rect x="280" y="310" width="20" height="20" rx="2"/>
+    <rect x="190" y="340" width="20" height="20" rx="2"/>
+    <rect x="220" y="340" width="20" height="20" rx="2"/>
+    <rect x="250" y="340" width="20" height="20" rx="2"/>
+    <rect x="280" y="340" width="20" height="20" rx="2"/>
+    <rect x="190" y="370" width="20" height="20" rx="2"/>
+  </g>
+  
+  <!-- Check mark in calendar -->
+  <path d="M195 375l8 8 16-16" stroke="#2D5A27" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Clock -->
+  <circle cx="256" cy="200" r="60" fill="white" stroke="#2D5A27" stroke-width="6"/>
+  <circle cx="256" cy="200" r="4" fill="#2D5A27"/>
+  <line x1="256" y1="200" x2="256" y2="170" stroke="#2D5A27" stroke-width="4" stroke-linecap="round"/>
+  <line x1="256" y1="200" x2="280" y2="200" stroke="#2D5A27" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Clock dots -->
+  <circle cx="256" cy="150" r="3" fill="#2D5A27"/>
+  <circle cx="280" cy="170" r="3" fill="#2D5A27"/>
+  <circle cx="280" cy="230" r="3" fill="#2D5A27"/>
+  <circle cx="256" cy="250" r="3" fill="#2D5A27"/>
+  <circle cx="232" cy="230" r="3" fill="#2D5A27"/>
+  <circle cx="232" cy="170" r="3" fill="#2D5A27"/>
+  
+  <!-- Play symbol in clock -->
+  <path d="M248 185l12 8-12 8z" fill="#2D5A27"/>
+  
+  <!-- Circular arrow -->
+  <path d="M320 180 Q360 160 380 200 Q400 240 360 260 Q320 280 280 260" stroke="#FF8C00" stroke-width="12" fill="none" stroke-linecap="round"/>
+  <path d="M275 255l8-8 8 8" stroke="#FF8C00" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

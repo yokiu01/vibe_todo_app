@@ -6,7 +6,6 @@ import '../providers/pds_diary_provider.dart';
 import '../models/pds_plan.dart';
 import '../services/lock_screen_service.dart';
 
-// LockScreenActivity 전용 독립 화면
 class LockScreenStandalone extends StatefulWidget {
   const LockScreenStandalone({super.key});
 
@@ -20,8 +19,10 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
   DateTime _selectedDate = DateTime.now();
   late AnimationController _fadeController;
   late AnimationController _slideController;
+  late AnimationController _pulseController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  late Animation<double> _pulseAnimation;
   bool _canEdit = false;
   late ScrollController _scrollController;
 
@@ -41,7 +42,6 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
       switch (call.method) {
         case 'showLockScreen':
           print('LockScreenStandalone: showLockScreen called');
-          // 이미 표시되어 있으므로 아무것도 하지 않음
           break;
       }
     });
@@ -54,6 +54,10 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     );
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
 
@@ -73,8 +77,17 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
       curve: Curves.easeOutCubic,
     ));
 
+    _pulseAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+
     _fadeController.forward();
     _slideController.forward();
+    _pulseController.repeat(reverse: true);
   }
 
   Future<void> _checkEditPermission() async {
@@ -97,13 +110,11 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
   }
 
   void _scrollToCurrentTime() {
-    // 현재 시간에 해당하는 스크롤 위치 계산
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         final currentHour = DateTime.now().hour;
         final timeSlots = PDSPlan.generateTimeSlots();
         
-        // 현재 시간에 해당하는 인덱스 찾기
         int currentIndex = 0;
         for (int i = 0; i < timeSlots.length; i++) {
           if (timeSlots[i].hour24 == currentHour) {
@@ -112,8 +123,7 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
           }
         }
         
-        // 스크롤 위치 계산 (각 아이템 높이 약 80px)
-        final scrollOffset = currentIndex * 80.0;
+        final scrollOffset = currentIndex * 85.0;
         _scrollController.animateTo(
           scrollOffset,
           duration: const Duration(milliseconds: 500),
@@ -125,10 +135,11 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
 
   void _closeLockScreen() async {
     try {
+      // Android 잠금화면으로 돌아가기 위해 Activity를 종료
       await _channel.invokeMethod('closeLockScreen');
     } catch (e) {
       print('Error closing lock screen: $e');
-      // 폴백: SystemNavigator 사용
+      // Activity를 종료하여 Android 잠금화면으로 돌아감
       SystemNavigator.pop();
     }
   }
@@ -137,6 +148,7 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
   void dispose() {
     _fadeController.dispose();
     _slideController.dispose();
+    _pulseController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -177,12 +189,7 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
                       child: _buildPlanDoSection(),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // 하단 고정 버튼들
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: _buildQuickActions(),
-                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -194,58 +201,31 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            DateFormat('HH:mm').format(DateTime.now()),
-            style: const TextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.w300,
-              color: Colors.white,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
           Text(
             DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w400,
-              color: Colors.white.withOpacity(0.8),
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withOpacity(0.9),
             ),
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFF3B82F6).withOpacity(0.3),
-              ),
-            ),
-            child: const Text(
-              '✨ Plan · Do · See',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-              ),
+          IconButton(
+            onPressed: _closeLockScreen,
+            icon: const Icon(
+              Icons.close,
+              color: Colors.white,
+              size: 24,
             ),
           ),
         ],
       ),
     );
   }
+
 
   Widget _buildPlanDoSection() {
     return Consumer<PDSDiaryProvider>(
@@ -256,7 +236,7 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
         final actualActivities = currentPlan?.actualActivities ?? {};
 
         return Container(
-          height: 400, // 고정 높이 설정
+          height: 500, // 높이 증가
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(16),
@@ -341,8 +321,8 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
                                       Container(
                                         width: 8,
                                         height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFF3B82F6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF3B82F6),
                                           shape: BoxShape.circle,
                                         ),
                                       ),
@@ -369,8 +349,8 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
                                       Container(
                                         width: 8,
                                         height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFF10B981),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF10B981),
                                           shape: BoxShape.circle,
                                         ),
                                       ),
@@ -431,126 +411,6 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     );
   }
 
-  Widget _buildQuickActions() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            '빠른 작업',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.9),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.playlist_add_check,
-                  label: '계획 보기',
-                  onTap: () => _openMainApp(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.edit_note,
-                  label: 'DO 기록',
-                  onTap: _canEdit ? () => _openMainApp() : null,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: _buildActionButton(
-              icon: Icons.close,
-              label: '닫기',
-              onTap: () {
-                // 확실히 닫기 위해 여러 방법 시도
-                _closeLockScreen();
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                } else {
-                  Navigator.of(context, rootNavigator: true).pop();
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    VoidCallback? onTap,
-  }) {
-    final isEnabled = onTap != null;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isEnabled
-              ? Colors.white.withOpacity(0.1)
-              : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isEnabled
-                ? Colors.white.withOpacity(0.2)
-                : Colors.white.withOpacity(0.1),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isEnabled
-                  ? Colors.white.withOpacity(0.9)
-                  : Colors.white.withOpacity(0.4),
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isEnabled
-                    ? Colors.white.withOpacity(0.9)
-                    : Colors.white.withOpacity(0.4),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openMainApp() {
-    // 메인 앱 열기 (MainActivity)
-    _closeLockScreen();
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-  }
 
   void _showDoEditDialog(TimeSlot slot, String planned, String actual) {
     final TextEditingController actualController = TextEditingController(text: actual);

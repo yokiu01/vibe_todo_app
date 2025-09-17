@@ -79,6 +79,11 @@ class MainActivity : FlutterActivity() {
         setupLockScreenReceiver()
     }
 
+    override fun onResume() {
+        super.onResume()
+        Log.d("MainActivity", "App resumed")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         // Context-registered receiver 해제

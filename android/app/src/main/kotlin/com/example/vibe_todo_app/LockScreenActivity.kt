@@ -39,6 +39,7 @@ class LockScreenActivity : FlutterActivity() {
             when (call.method) {
                 "closeLockScreen" -> {
                     Log.d("LockScreenActivity", "Closing lock screen activity")
+                    // Android 잠금화면으로 돌아가기 위해 Activity 종료
                     finish()
                     result.success(null)
                 }

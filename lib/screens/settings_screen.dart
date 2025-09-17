@@ -107,12 +107,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _testOverlay() async {
     try {
       print('Settings: Testing lock screen overlay');
-      // 락스크린을 직접 표시
-      await showLockScreen(context);
-      _showSnackBar('락스크린 테스트가 실행되었습니다.');
+      // 이제 Android 잠금화면 위에만 표시되므로 테스트 불가
+      _showSnackBar('잠금화면은 화면을 껐다 켤 때 Android 잠금화면 위에 표시됩니다.');
     } catch (e) {
       print('Settings: Lock screen test failed: $e');
-      _showSnackBar('락스크린 테스트 실패: $e', isError: true);
+      _showSnackBar('잠금화면 테스트 실패: $e', isError: true);
     }
   }
 

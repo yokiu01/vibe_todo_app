@@ -364,14 +364,4 @@ class _LockScreenOverlayState extends State<LockScreenOverlay>
   }
 }
 
-// 잠금화면 오버레이를 표시하는 함수
-Future<void> showLockScreenOverlay(BuildContext context) async {
-  final isEnabled = await LockScreenService.isLockScreenEnabled();
-  if (!isEnabled) return;
-
-  await showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (context) => const LockScreenOverlay(),
-  );
-}
+// 이제 Android 잠금화면 위에만 표시되므로 이 함수는 사용하지 않음

@@ -156,12 +156,7 @@ class _LockScreenState extends State<LockScreen>
                       child: _buildPlanDoSection(),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // 하단 고정 버튼들
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: _buildQuickActions(),
-                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -173,52 +168,24 @@ class _LockScreenState extends State<LockScreen>
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            DateFormat('HH:mm').format(DateTime.now()),
-            style: const TextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.w300,
-              color: Colors.white,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
           Text(
             DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w400,
-              color: Colors.white.withOpacity(0.8),
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withOpacity(0.9),
             ),
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFF3B82F6).withOpacity(0.3),
-              ),
-            ),
-            child: const Text(
-              '✨ Plan · Do · See',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-              ),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(
+              Icons.close,
+              color: Colors.white,
+              size: 24,
             ),
           ),
         ],
@@ -235,7 +202,7 @@ class _LockScreenState extends State<LockScreen>
         final actualActivities = currentPlan?.actualActivities ?? {};
 
         return Container(
-          height: 400, // 고정 높이 설정
+          height: 500, // 높이 증가
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(16),
@@ -410,136 +377,6 @@ class _LockScreenState extends State<LockScreen>
     );
   }
 
-  Widget _buildQuickActions() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            '빠른 작업',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.9),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.playlist_add_check,
-                  label: '계획 보기',
-                  onTap: () => _openPlanPage(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.edit_note,
-                  label: 'DO 기록',
-                  onTap: _canEdit ? () => _openDoPage() : null,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: _buildActionButton(
-              icon: Icons.close,
-              label: '닫기',
-              onTap: () {
-                // 확실히 닫기 위해 여러 방법 시도
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                } else {
-                  // Navigator.pop이 안 되면 root context로 시도
-                  Navigator.of(context, rootNavigator: true).pop();
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    VoidCallback? onTap,
-  }) {
-    final isEnabled = onTap != null;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isEnabled
-              ? Colors.white.withOpacity(0.1)
-              : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isEnabled
-                ? Colors.white.withOpacity(0.2)
-                : Colors.white.withOpacity(0.1),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isEnabled
-                  ? Colors.white.withOpacity(0.9)
-                  : Colors.white.withOpacity(0.4),
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isEnabled
-                    ? Colors.white.withOpacity(0.9)
-                    : Colors.white.withOpacity(0.4),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openPlanPage() {
-    // Navigate to planning screen
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-    // You might want to navigate to a specific tab in the main app
-  }
-
-  void _openDoPage() {
-    // Navigate to do-see screen
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-    // You might want to navigate to a specific tab in the main app
-  }
 
   void _showDoEditDialog(TimeSlot slot, String planned, String actual) {
     final TextEditingController actualController = TextEditingController(text: actual);
@@ -637,48 +474,4 @@ class _LockScreenState extends State<LockScreen>
   }
 }
 
-// 잠금화면이 이미 표시되고 있는지 확인하는 플래그
-bool _isLockScreenShowing = false;
-
-// Function to show lock screen
-Future<void> showLockScreen(BuildContext context) async {
-  print('showLockScreen called');
-  
-  // 이미 잠금화면이 표시되고 있으면 중복 호출 방지
-  if (_isLockScreenShowing) {
-    print('showLockScreen - already showing, returning');
-    return;
-  }
-  
-  final isEnabled = await LockScreenService.isLockScreenEnabled();
-  print('showLockScreen - isEnabled: $isEnabled');
-  if (!isEnabled) {
-    print('showLockScreen - lock screen not enabled, returning');
-    return;
-  }
-
-  print('showLockScreen - showing lock screen');
-  _isLockScreenShowing = true;
-  
-  try {
-    // Provider로 감싼 LockScreen 사용
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => MultiProvider(
-          providers: [
-            ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
-          ],
-          child: const LockScreen(),
-        ),
-        fullscreenDialog: true,
-        maintainState: false,
-      ),
-    );
-    print('showLockScreen - lock screen closed');
-  } catch (e) {
-    print('showLockScreen - error: $e');
-  } finally {
-    // 잠금화면이 닫힐 때 플래그 리셋
-    _isLockScreenShowing = false;
-  }
-}
+// 이제 Android 잠금화면 위에만 표시되므로 이 함수는 사용하지 않음

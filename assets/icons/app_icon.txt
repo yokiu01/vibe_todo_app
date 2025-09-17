@@ -1,0 +1,24 @@
+
+Second Brain App Icon
+====================
+
+Design Elements:
+- Shield shape background (dark green #2D5A27)
+- Calendar at bottom (white with dark green border)
+- Clock at top center (white with dark green border)
+- Circular arrow around clock (orange #FF8C00)
+- Check mark in calendar
+- Play symbol in clock
+
+Colors:
+- Dark Green: #2D5A27
+- Orange: #FF8C00
+- White: #FFFFFF
+
+This icon represents:
+- Planning (calendar)
+- Time management (clock)
+- Productivity cycle (circular arrow)
+- Completion (check mark)
+- Action/Progress (play symbol)
+- Protection/Reliability (shield)

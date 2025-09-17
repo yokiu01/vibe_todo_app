@@ -85,9 +85,7 @@ class LockScreenService {
         return;
       }
 
-      print('LockScreenService: _onScreenOn is null, trying native method');
-      // 기존 네이티브 방식 호출 (백업)
-      await _channel.invokeMethod('showLockScreenOverlay');
+      print('LockScreenService: _onScreenOn is null - Android will handle lock screen display');
     } catch (e) {
       print('Error showing overlay manually: $e');
     }
