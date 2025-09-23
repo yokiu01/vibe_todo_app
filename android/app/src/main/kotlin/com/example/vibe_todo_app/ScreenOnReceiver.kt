@@ -3,10 +3,8 @@ package com.example.vibe_todo_app
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.app.ActivityManager
 import android.util.Log
 import io.flutter.plugin.common.MethodChannel
-import android.app.ActivityManager.RunningAppProcessInfo
 
 class ScreenOnReceiver : BroadcastReceiver() {
     var methodChannel: MethodChannel? = null
@@ -17,51 +15,37 @@ class ScreenOnReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         Log.d("ScreenOnReceiver", "Received intent: ${intent.action}")
-        
+
         when (intent.action) {
             Intent.ACTION_SCREEN_ON -> {
-                Log.d("ScreenOnReceiver", "Screen turned ON")
+                Log.d("ScreenOnReceiver", "Screen turned ON - Checking lock screen preference")
 
-                // 직접 LockScreenActivity 시작 (백그라운드에서도 작동)
-                try {
-                    LockScreenActivity.start(context)
-                    Log.d("ScreenOnReceiver", "LockScreenActivity started")
-                } catch (e: Exception) {
-                    Log.e("ScreenOnReceiver", "Error starting LockScreenActivity: $e")
-                }
+                // 잠금화면 설정 확인 (SharedPreferences에서)
+                val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                val isLockScreenEnabled = prefs.getBoolean("flutter.lock_screen_enabled", false)
 
-                // 기존 MethodChannel 방식도 유지 (앱이 포그라운드일 때)
-                val channel = methodChannel ?: Companion.methodChannel
-                if (channel != null) {
-                    Log.d("ScreenOnReceiver", "Calling Flutter method for screen on")
+                Log.d("ScreenOnReceiver", "Lock screen enabled: $isLockScreenEnabled")
+
+                if (isLockScreenEnabled) {
+                    Log.d("ScreenOnReceiver", "Starting LockScreenActivity")
                     try {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            channel.invokeMethod("onScreenOn", null)
-                            Log.d("ScreenOnReceiver", "Flutter method called successfully")
-                        }
+                        val lockIntent = Intent(context, LockScreenActivity::class.java)
+                        lockIntent.addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                            Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT or
+                            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                            Intent.FLAG_ACTIVITY_NO_HISTORY
+                        )
+                        context.startActivity(lockIntent)
+                        Log.d("ScreenOnReceiver", "LockScreenActivity started successfully")
                     } catch (e: Exception) {
-                        Log.e("ScreenOnReceiver", "Error calling Flutter method: $e")
-                    }
-                }
-            }
-            Intent.ACTION_USER_PRESENT -> {
-                Log.d("ScreenOnReceiver", "User unlocked screen")
-
-                val channel = methodChannel ?: Companion.methodChannel
-                if (channel != null) {
-                    Log.d("ScreenOnReceiver", "Calling Flutter method for user present")
-
-                    try {
-                        // Handler를 사용해서 메인 스레드에서 호출
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            channel.invokeMethod("onScreenOn", null)
-                            Log.d("ScreenOnReceiver", "Flutter method called successfully for user present")
-                        }
-                    } catch (e: Exception) {
-                        Log.e("ScreenOnReceiver", "Error calling Flutter method for user present: $e")
+                        Log.e("ScreenOnReceiver", "Error starting LockScreenActivity: $e")
+                        e.printStackTrace()
                     }
                 } else {
-                    Log.d("ScreenOnReceiver", "MethodChannel null for user present, skipping")
+                    Log.d("ScreenOnReceiver", "Lock screen disabled - not starting LockScreenActivity")
                 }
             }
             Intent.ACTION_SCREEN_OFF -> {

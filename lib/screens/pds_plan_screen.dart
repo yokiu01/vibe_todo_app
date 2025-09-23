@@ -110,7 +110,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               primary: Color(0xFF3B82F6),
               onPrimary: Colors.white,
               surface: Colors.white,
-              onSurface: Color(0xFF1E293B),
+              onSurface: Color(0xFF3C2A21),
             ),
           ),
           child: child!,
@@ -177,7 +177,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF5F1E8),
       body: SafeArea(
         child: Column(
           children: [
@@ -215,7 +215,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E293B),
+              color: Color(0xFF3C2A21),
             ),
           ),
           const SizedBox(height: 4),
@@ -235,7 +235,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                     DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
                     style: const TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF64748B),
+                      color: Color(0xFF8B7355),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -243,7 +243,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                   const Icon(
                     Icons.calendar_today,
                     size: 16,
-                    color: Color(0xFF64748B),
+                    color: Color(0xFF8B7355),
                   ),
                 ],
               ),
@@ -333,14 +333,14 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               Icon(
                 Icons.calendar_today,
                 size: 14,
-                color: const Color(0xFF64748B),
+                color: const Color(0xFF8B7355),
               ),
               const SizedBox(width: 4),
               Text(
                 DateFormat('M월 d일', 'ko').format(_selectedDate),
                 style: const TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Color(0xFF8B7355),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -483,7 +483,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               Icon(
                 isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
                 size: 16,
-                color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF64748B),
+                color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF8B7355),
               ),
             ],
           ),
@@ -493,7 +493,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF1E293B),
+              color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF3C2A21),
               decoration: isCompleted ? TextDecoration.lineThrough : null,
             ),
             maxLines: 2,
@@ -519,14 +519,14 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                 Icon(
                   Icons.access_time,
                   size: 12,
-                  color: const Color(0xFF64748B),
+                  color: const Color(0xFF8B7355),
                 ),
                 const SizedBox(width: 4),
                 Text(
                   DateFormat('HH:mm').format(task.dueDate!),
                   style: const TextStyle(
                     fontSize: 10,
-                    color: Color(0xFF64748B),
+                    color: Color(0xFF8B7355),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -610,7 +610,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               Icon(
                 isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
                 size: 16,
-                color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF64748B),
+                color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF8B7355),
               ),
             ],
           ),
@@ -620,7 +620,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF1E293B),
+              color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF3C2A21),
               decoration: isCompleted ? TextDecoration.lineThrough : null,
             ),
             maxLines: 2,
@@ -646,14 +646,14 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                 Icon(
                   Icons.access_time,
                   size: 12,
-                  color: const Color(0xFF64748B),
+                  color: const Color(0xFF8B7355),
                 ),
                 const SizedBox(width: 4),
                 Text(
                   DateFormat('HH:mm').format(task.dueDate!),
                   style: const TextStyle(
                     fontSize: 10,
-                    color: Color(0xFF64748B),
+                    color: Color(0xFF8B7355),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -712,7 +712,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
       case 'review':
         return const Color(0xFFF59E0B);
       default:
-        return const Color(0xFF64748B);
+        return const Color(0xFF8B7355);
     }
   }
 
@@ -723,7 +723,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
       case ItemStatus.active:
         return const Color(0xFF3B82F6);
       default:
-        return const Color(0xFF64748B);
+        return const Color(0xFF8B7355);
     }
   }
 
@@ -756,7 +756,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF2563EB)),
+            borderSide: const BorderSide(color: Color(0xFF8B7355)),
           ),
           contentPadding: const EdgeInsets.all(8),
           hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
@@ -800,7 +800,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
       height: 60,
       margin: const EdgeInsets.only(bottom: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: const Color(0xFFF5F1E8),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Center(
@@ -809,7 +809,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
           style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF64748B),
+            color: Color(0xFF8B7355),
           ),
         ),
       ),
@@ -853,7 +853,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFEBF4FF),
         border: const Border(
-          left: BorderSide(color: Color(0xFF2563EB), width: 3),
+          left: BorderSide(color: Color(0xFF8B7355), width: 3),
         ),
         borderRadius: BorderRadius.circular(4),
       ),
@@ -864,7 +864,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
             task.title,
             style: const TextStyle(
               fontSize: 11,
-              color: Color(0xFF1E293B),
+              color: Color(0xFF3C2A21),
               fontWeight: FontWeight.w500,
             ),
             maxLines: 2,
@@ -876,7 +876,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               '${task.estimatedDuration}분',
               style: const TextStyle(
                 fontSize: 9,
-                color: Color(0xFF64748B),
+                color: Color(0xFF8B7355),
               ),
             ),
           ],

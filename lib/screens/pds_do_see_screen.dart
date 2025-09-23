@@ -159,10 +159,10 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF2563EB),
+              primary: Color(0xFF8B7355),
               onPrimary: Colors.white,
               surface: Colors.white,
-              onSurface: Color(0xFF1E293B),
+              onSurface: Color(0xFF3C2A21),
             ),
           ),
           child: child!,
@@ -192,7 +192,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF5F1E8),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshData,
@@ -233,7 +233,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E293B),
+              color: Color(0xFF3C2A21),
             ),
           ),
           const SizedBox(height: 8),
@@ -261,7 +261,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
                   const Icon(
                     Icons.calendar_today,
                     size: 18,
-                    color: Color(0xFF2563EB),
+                    color: Color(0xFF8B7355),
                   ),
                 ],
               ),
@@ -392,7 +392,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
       decoration: BoxDecoration(
         color: plannedText.isNotEmpty || slotTasks.isNotEmpty
             ? const Color(0xFFF0F9FF)
-            : const Color(0xFFF8FAFC),
+            : const Color(0xFFF5F1E8),
         border: Border.all(
           color: plannedText.isNotEmpty || slotTasks.isNotEmpty
               ? const Color(0xFF3B82F6).withOpacity(0.3)
@@ -457,7 +457,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
       height: 60,
       margin: const EdgeInsets.only(bottom: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: const Color(0xFFF5F1E8),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Center(
@@ -466,7 +466,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
           style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF64748B),
+            color: Color(0xFF8B7355),
           ),
         ),
       ),
@@ -491,7 +491,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF2563EB)),
+            borderSide: const BorderSide(color: Color(0xFF8B7355)),
           ),
           contentPadding: const EdgeInsets.all(8),
           hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
@@ -551,7 +551,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
                 DateFormat('HH:mm').format(DateTime.now()),
                 style: const TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Color(0xFF8B7355),
                 ),
               ),
             ],
@@ -571,7 +571,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                borderSide: const BorderSide(color: Color(0xFF8B7355)),
               ),
               contentPadding: const EdgeInsets.all(16),
               hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),

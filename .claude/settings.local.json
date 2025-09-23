@@ -8,7 +8,18 @@
       "Bash(timeout:*)",
       "Bash(nc:*)",
       "Bash(printf \"R\\n\")",
-      "Bash(adb logcat:*)"
+      "Bash(adb logcat:*)",
+      "Bash(dir:*)",
+      "Bash(adb shell input keyevent:*)",
+      "Read(//c/Users/dlgus/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Bash(where adb)",
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" shell \"input keyevent 26\")",
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" logcat -d)",
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" shell)",
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" logcat -c)",
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" shell \"input keyevent 4\")",
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" shell \"am start -n com.example.vibe_todo_app/com.example.vibe_todo_app.MainActivity\")",
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" shell \"input keyevent 26 && sleep 1 && input keyevent 26\")"
     ],
     "deny": [],
     "ask": []

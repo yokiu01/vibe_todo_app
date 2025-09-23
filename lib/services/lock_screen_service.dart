@@ -52,24 +52,14 @@ class LockScreenService {
     }
   }
 
-  // 오버레이 권한 확인
+  // 오버레이 권한 확인 - Android에서 직접 처리하므로 항상 true 반환
   static Future<bool> hasOverlayPermission() async {
-    try {
-      final result = await _channel.invokeMethod('checkOverlayPermission');
-      return result as bool;
-    } catch (e) {
-      print('Error checking overlay permission: $e');
-      return false;
-    }
+    return true; // Android에서 직접 처리하므로 항상 true
   }
 
-  // 오버레이 권한 요청
+  // 오버레이 권한 요청 - Android에서 직접 처리하므로 아무것도 하지 않음
   static Future<void> requestOverlayPermission() async {
-    try {
-      await _channel.invokeMethod('requestOverlayPermission');
-    } catch (e) {
-      print('Error requesting overlay permission: $e');
-    }
+    // Android에서 직접 처리하므로 아무것도 하지 않음
   }
 
   // 수동으로 오버레이 표시 (테스트용)
@@ -94,7 +84,7 @@ class LockScreenService {
   // 잠금화면에서 plan과 do를 볼 수 있는지 설정
   static Future<bool> isLockScreenEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('lock_screen_enabled') ?? false;
+    return prefs.getBool('lock_screen_enabled') ?? true; // 기본값을 true로 변경
   }
   
   static Future<void> setLockScreenEnabled(bool enabled) async {

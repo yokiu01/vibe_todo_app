@@ -133,55 +133,179 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
 
   /// 타입 선택 다이얼로그
   void _showTypeDialog(NotionTask item) {
+    final classificationOptions = [
+      {
+        'title': '다음행동',
+        'icon': Icons.play_arrow,
+        'color': const Color(0xFF3B82F6),
+        'action': () => _showNextActionDialog(item),
+      },
+      {
+        'title': '위임',
+        'icon': Icons.person,
+        'color': const Color(0xFF10B981),
+        'action': () => _classifyItem(item, '위임'),
+      },
+      {
+        'title': '일정',
+        'icon': Icons.schedule,
+        'color': const Color(0xFFF59E0B),
+        'action': () => _showDatePickerForSchedule(item),
+      },
+      {
+        'title': '목표',
+        'icon': Icons.flag,
+        'color': const Color(0xFFEF4444),
+        'action': () => _classifyItem(item, '목표'),
+      },
+      {
+        'title': '프로젝트',
+        'icon': Icons.folder,
+        'color': const Color(0xFF8B5CF6),
+        'action': () => _classifyItem(item, '프로젝트'),
+      },
+      {
+        'title': '다시 알림',
+        'icon': Icons.notifications,
+        'color': const Color(0xFF06B6D4),
+        'action': () => _showDatePickerForReminder(item),
+      },
+    ];
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('"${item.title}" 분류'),
-        content: const Text('이 항목을 어떻게 분류하시겠습니까?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _showNextActionDialog(item);
-            },
-            child: const Text('다음행동'),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 헤더
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B7355).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.category,
+                      color: Color(0xFF8B7355),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '"${item.title}" 분류',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '이 항목을 어떻게 분류하시겠습니까?',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // 2x3 그리드
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 1.2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: classificationOptions.length,
+                itemBuilder: (context, index) {
+                  final option = classificationOptions[index];
+                  return InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      option['action']!();
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: (option['color'] as Color).withOpacity(0.2),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (option['color'] as Color).withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: (option['color'] as Color).withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              option['icon'] as IconData,
+                              color: option['color'] as Color,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            option['title'] as String,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: option['color'] as Color,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 16),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _classifyItem(item, '위임');
-            },
-            child: const Text('위임'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _showDatePickerForSchedule(item);
-            },
-            child: const Text('일정'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _classifyItem(item, '목표');
-            },
-            child: const Text('목표'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _classifyItem(item, '프로젝트');
-            },
-            child: const Text('프로젝트'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _showDatePickerForReminder(item);
-            },
-            child: const Text('다시 알림'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -398,7 +522,8 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
       final areaResourceItems = await _authService.apiService!.getAreaResourceItems();
       
       if (areaResourceItems.isEmpty) {
-        _showErrorSnackBar('영역·자원 데이터베이스에 항목이 없습니다.');
+        // 영역·자원 데이터베이스가 비어있거나 없는 경우 기본 영역들 제공
+        _showDefaultAreaResourceDialog(title, targetPageId);
         return;
       }
 
@@ -443,8 +568,153 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
         ),
       );
     } catch (e) {
-      _showErrorSnackBar('영역·자원 목록을 가져오는데 실패했습니다: $e');
+      print('영역·자원 데이터베이스 접근 오류: $e');
+      // 데이터베이스 접근에 실패한 경우 기본 영역들 제공
+      _showDefaultAreaResourceDialog(title, targetPageId);
     }
+  }
+
+  /// 기본 영역·자원 선택 다이얼로그
+  void _showDefaultAreaResourceDialog(String title, String targetPageId) {
+    final defaultAreas = [
+      {'name': '개인', 'icon': Icons.person},
+      {'name': '업무', 'icon': Icons.work},
+      {'name': '학습', 'icon': Icons.school},
+      {'name': '건강', 'icon': Icons.favorite},
+      {'name': '취미', 'icon': Icons.star},
+      {'name': '가족', 'icon': Icons.family_restroom},
+      {'name': '기타', 'icon': Icons.more_horiz},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 헤더
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B7355).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.category,
+                      color: Color(0xFF8B7355),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '"$title" 영역 분류',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '이 항목을 어떤 영역으로 분류하시겠습니까?',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // 기본 영역들 그리드
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 1.5,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: defaultAreas.length,
+                itemBuilder: (context, index) {
+                  final area = defaultAreas[index];
+                  return InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _addDefaultAreaRelation(targetPageId, area['name'] as String);
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFF8B7355).withOpacity(0.2),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF8B7355).withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            area['icon'] as IconData,
+                            color: const Color(0xFF8B7355),
+                            size: 24,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            area['name'] as String,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF8B7355),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// 다음 행동 상황 입력 다이얼로그
@@ -894,6 +1164,63 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
       _showSuccessSnackBar('영역·자원 "$areaResourceName"이(가) 추가되었습니다.');
     } catch (e) {
       _showErrorSnackBar('영역·자원 추가 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 기본 영역 관계 추가 (영역·자원 데이터베이스에 페이지 생성 후 관계 연결)
+  Future<void> _addDefaultAreaRelation(String pageId, String areaName) async {
+    try {
+      // 1. 영역·자원 데이터베이스에 새 페이지 생성
+      final areaResourcePageId = await _createAreaResourcePage(areaName);
+      
+      // 2. 노트 데이터베이스의 페이지에 영역·자원 관계 추가
+      final updateProperties = <String, dynamic>{
+        '영역 · 자원 데이터베이스': {
+          'relation': [
+            {
+              'id': areaResourcePageId,
+            }
+          ]
+        }
+      };
+
+      await _authService.apiService!.updatePage(pageId, updateProperties);
+      _showSuccessSnackBar('영역 "$areaName"이(가) 추가되었습니다.');
+    } catch (e) {
+      print('기본 영역 추가 오류: $e');
+      _showErrorSnackBar('영역 추가 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 영역·자원 데이터베이스에 페이지 생성
+  Future<String> _createAreaResourcePage(String areaName) async {
+    try {
+      final properties = <String, dynamic>{
+        '이름': {
+          'title': [
+            {
+              'text': {
+                'content': areaName,
+              }
+            }
+          ]
+        },
+        '분류': {
+          'select': {
+            'name': '영역',
+          }
+        },
+      };
+
+      final createdPage = await _authService.apiService!.createPage(
+        '1159f5e4a81180e3a9f2fdf6634730e6', // MEMO_DB_ID (영역·자원 데이터베이스)
+        properties
+      );
+
+      return createdPage['id'] as String;
+    } catch (e) {
+      print('영역·자원 페이지 생성 오류: $e');
+      rethrow;
     }
   }
 

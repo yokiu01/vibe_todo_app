@@ -83,7 +83,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF5F1E8),
       body: SafeArea(
         child: Column(
           children: [
@@ -111,14 +111,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E293B),
+              color: Color(0xFF3C2A21),
             ),
           ),
           if (_currentReview != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF059669),
+                color: const Color(0xFF8B7355),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -156,8 +156,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
         child: ElevatedButton(
           onPressed: () => _changeReviewType(type),
           style: ElevatedButton.styleFrom(
-            backgroundColor: isActive ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
-            foregroundColor: isActive ? Colors.white : const Color(0xFF64748B),
+            backgroundColor: isActive ? const Color(0xFF8B7355) : const Color(0xFFDDD4C0),
+            foregroundColor: isActive ? const Color(0xFFFDF6E3) : const Color(0xFF8B7355),
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -182,7 +182,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         DateFormat('yyyy년 M월 d일 EEEE', 'ko').format(DateTime.now()),
         style: const TextStyle(
           fontSize: 16,
-          color: Color(0xFF64748B),
+          color: Color(0xFF8B7355),
         ),
       ),
     );
@@ -195,7 +195,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: 6,
       decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0),
+        color: const Color(0xFFDDD4C0),
         borderRadius: BorderRadius.circular(3),
       ),
       child: FractionallySizedBox(
@@ -203,7 +203,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         widthFactor: _currentReview!.completionRate,
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF059669),
+            color: const Color(0xFF8B7355),
             borderRadius: BorderRadius.circular(3),
           ),
         ),
@@ -266,10 +266,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isCompleted ? const Color(0xFFF0FDF4) : Colors.white,
+          color: isCompleted ? const Color(0xFFFDF6E3) : const Color(0xFFFDF6E3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isCompleted ? const Color(0xFF059669) : const Color(0xFFE2E8F0),
+            color: isCompleted ? const Color(0xFF8B7355) : const Color(0xFFDDD4C0),
           ),
         ),
         child: Row(
@@ -278,7 +278,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: isCompleted ? const Color(0xFF059669) : const Color(0xFFE2E8F0),
+                color: isCompleted ? const Color(0xFF8B7355) : const Color(0xFFDDD4C0),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Center(
@@ -302,7 +302,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: isCompleted ? const Color(0xFF059669) : const Color(0xFF1E293B),
+                      color: isCompleted ? const Color(0xFF8B7355) : const Color(0xFF3C2A21),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -310,7 +310,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     step.description,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                      color: isCompleted ? const Color(0xFF8B7355) : const Color(0xFF8B7355),
                       height: 1.4,
                     ),
                   ),

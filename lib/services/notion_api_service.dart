@@ -11,7 +11,7 @@ class NotionApiService {
   static const String MEMO_DB_ID = '1159f5e4a81180e3a9f2fdf6634730e6';
   static const String PROJECT_DB_ID = '1159f5e4a81180019f29cdd24d369230';
   static const String GOAL_DB_ID = '1159f5e4a81180d092add53ae9df7f05';
-  static const String AREA_RESOURCE_DB_ID = '1159f5e4a81180e39c16c6e30be0e46e'; // 이 ID는 존재하지 않음
+  static const String AREA_RESOURCE_DB_ID = '1159f5e4a81180d1ab17fa79bb0cf0f4'; // 영역·자원 데이터베이스
   
   static const String _apiKeyKey = 'notion_api_key';
   
@@ -715,6 +715,39 @@ class NotionApiService {
       return filteredNotes;
     } catch (e) {
       print('getAllNotes 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 위치 기반 할일 조회 (위치 기반 알림용)
+  Future<List<Map<String, dynamic>>> getTasksForLocation(String locationName) async {
+    try {
+      final filter = {
+        'and': [
+          {
+            'property': '완료',
+            'checkbox': {
+              'equals': false,
+            }
+          },
+          {
+            'property': '명료화',
+            'select': {
+              'equals': '다음행동',
+            }
+          },
+          {
+            'property': '다음 행동 상황',
+            'multi_select': {
+              'contains': locationName,
+            }
+          }
+        ]
+      };
+
+      return await queryDatabase(TODO_DB_ID, filter);
+    } catch (e) {
+      print('위치 기반 할일 조회 오류: $e');
       rethrow;
     }
   }

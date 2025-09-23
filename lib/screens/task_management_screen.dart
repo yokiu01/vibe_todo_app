@@ -459,7 +459,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF8FAFC),
+      color: const Color(0xFFF5F1E8),
       child: Column(
         children: [
           // Tab bar section
@@ -468,13 +468,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
             child: TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
-                color: const Color(0xFF2563EB),
+                color: const Color(0xFF8B7355),
                 borderRadius: BorderRadius.circular(8),
               ),
               indicatorSize: TabBarIndicatorSize.tab,
               indicatorPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               labelColor: Colors.white,
-              unselectedLabelColor: const Color(0xFF64748B),
+              unselectedLabelColor: const Color(0xFF8B7355),
               labelStyle: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -649,24 +649,32 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     }
 
     if (tasks.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              emptyIcon,
-              size: 64,
-              color: emptyColor.withOpacity(0.5),
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Container(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height - 200,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  emptyIcon,
+                  size: 64,
+                  color: emptyColor.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  emptyMessage,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              emptyMessage,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -770,7 +778,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: task.isCompleted ? const Color(0xFF64748B) : const Color(0xFF1E293B),
+                color: task.isCompleted ? const Color(0xFF8B7355) : const Color(0xFF3C2A21),
                 decoration: task.isCompleted ? TextDecoration.lineThrough : null,
               ),
               maxLines: 2,
@@ -782,7 +790,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                 task.description!,
                 style: TextStyle(
                   fontSize: 14,
-                  color: task.isCompleted ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: task.isCompleted ? const Color(0xFF94A3B8) : const Color(0xFF8B7355),
                   decoration: task.isCompleted ? TextDecoration.lineThrough : null,
                 ),
                 maxLines: 3,
@@ -798,7 +806,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                     size: 16,
                     color: isOverdue
                         ? const Color(0xFFEF4444)
-                        : const Color(0xFF64748B),
+                        : const Color(0xFF8B7355),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -808,7 +816,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                       fontWeight: FontWeight.w500,
                       color: isOverdue
                           ? const Color(0xFFEF4444)
-                          : const Color(0xFF64748B),
+                          : const Color(0xFF8B7355),
                     ),
                   ),
                 ],
@@ -825,7 +833,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                       style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF2563EB),
+                        color: Color(0xFF8B7355),
                       ),
                     ),
                   ),
@@ -1068,7 +1076,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
-            color: Color(0xFF2563EB),
+            color: Color(0xFF8B7355),
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(16),
               topRight: Radius.circular(16),
@@ -1145,7 +1153,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                             fontSize: 14,
                             color: _isCompleted
                                 ? const Color(0xFF22C55E)
-                                : const Color(0xFF64748B),
+                                : const Color(0xFF8B7355),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1172,7 +1180,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E293B),
+                    color: Color(0xFF3C2A21),
                   ),
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
@@ -1185,14 +1193,14 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                      borderSide: const BorderSide(color: Color(0xFF8B7355)),
                     ),
                     disabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
                     ),
                     filled: true,
-                    fillColor: _isEditing ? Colors.white : const Color(0xFFF8FAFC),
+                    fillColor: _isEditing ? Colors.white : const Color(0xFFF5F1E8),
                     contentPadding: const EdgeInsets.all(12),
                   ),
                   maxLines: 2,
@@ -1215,7 +1223,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                   enabled: _isEditing,
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF1E293B),
+                    color: Color(0xFF3C2A21),
                   ),
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
@@ -1228,14 +1236,14 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                      borderSide: const BorderSide(color: Color(0xFF8B7355)),
                     ),
                     disabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
                     ),
                     filled: true,
-                    fillColor: _isEditing ? Colors.white : const Color(0xFFF8FAFC),
+                    fillColor: _isEditing ? Colors.white : const Color(0xFFF5F1E8),
                     contentPadding: const EdgeInsets.all(12),
                     hintText: '상세설명을 입력해주세요',
                   ),
@@ -1258,7 +1266,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: const Color(0xFFF5F1E8),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
@@ -1267,14 +1275,14 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                         const Icon(
                           Icons.schedule,
                           size: 16,
-                          color: Color(0xFF64748B),
+                          color: Color(0xFF8B7355),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           '${widget.task.dueDate!.year}-${widget.task.dueDate!.month.toString().padLeft(2, '0')}-${widget.task.dueDate!.day.toString().padLeft(2, '0')}',
                           style: const TextStyle(
                             fontSize: 14,
-                            color: Color(0xFF1E293B),
+                            color: Color(0xFF3C2A21),
                           ),
                         ),
                       ],
@@ -1298,13 +1306,13 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
+                      border: Border.all(color: const Color(0xFF8B7355).withOpacity(0.2)),
                     ),
                     child: Text(
                       widget.task.clarification!,
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF2563EB),
+                        color: Color(0xFF8B7355),
                       ),
                     ),
                   ),
@@ -1318,7 +1326,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
-            color: Color(0xFFF8FAFC),
+            color: Color(0xFFF5F1E8),
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(16),
               bottomRight: Radius.circular(16),
@@ -1337,7 +1345,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                     icon: const Icon(Icons.edit, size: 18),
                     label: const Text('수정'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFF8B7355),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),

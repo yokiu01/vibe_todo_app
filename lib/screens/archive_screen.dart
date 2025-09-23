@@ -510,22 +510,22 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF5F1E8),
       appBar: AppBar(
         title: const Text(
           '📦 아카이브',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1E293B),
+            color: Color(0xFF3C2A21),
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFFDF6E3),
         elevation: 0,
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings, color: Color(0xFF64748B)),
+            icon: const Icon(Icons.settings, color: Color(0xFF8B7355)),
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -539,17 +539,17 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
         bottom: _isAuthenticated ? PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Container(
-            color: Colors.white,
+            color: const Color(0xFFFDF6E3),
             child: TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
-                color: const Color(0xFF2563EB),
+                color: const Color(0xFF8B7355),
                 borderRadius: BorderRadius.circular(8),
               ),
               indicatorSize: TabBarIndicatorSize.tab,
               indicatorPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              labelColor: Colors.white,
-              unselectedLabelColor: const Color(0xFF64748B),
+              labelColor: const Color(0xFFFDF6E3),
+              unselectedLabelColor: const Color(0xFF9C8B73),
               labelStyle: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -672,7 +672,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
           backgroundColor: _getCategoryColor(item.clarification),
           child: Icon(
             _getCategoryIcon(item.clarification),
-            color: Colors.white,
+            color: const Color(0xFFFDF6E3),
             size: 20,
           ),
         ),
@@ -809,8 +809,8 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFFF8FAFC),
-                Color(0xFFE2E8F0),
+                Color(0xFFF5F1E8),
+                Color(0xFFDDD4C0),
               ],
             ),
           ),
@@ -993,9 +993,9 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFFDF6E3),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: const Color(0xFFDDD4C0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -1019,21 +1019,21 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
+                        color: Color(0xFF3C2A21),
                       ),
                     ),
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF3B82F6).withOpacity(0.1),
+                        color: const Color(0xFF8B7355).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         '${items.length}개',
                         style: const TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF3B82F6),
+                          color: Color(0xFF8B7355),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1045,7 +1045,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
                   subtitle,
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF64748B),
+                    color: Color(0xFF8B7355),
                   ),
                 ),
               ],
@@ -1060,14 +1060,14 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
                     Icon(
                       Icons.inbox_outlined,
                       size: 48,
-                      color: const Color(0xFFE5E7EB),
+                      color: const Color(0xFFDDD4C0),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       emptyMessage,
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF9CA3AF),
+                        color: Color(0xFF8B7355),
                       ),
                       textAlign: TextAlign.center,
                     ),

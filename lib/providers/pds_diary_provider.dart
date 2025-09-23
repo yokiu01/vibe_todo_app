@@ -29,6 +29,28 @@ class PDSDiaryProvider with ChangeNotifier {
     }
   }
 
+  // 락 스크린용 최적화된 데이터 로딩
+  Future<void> loadPDSPlansForLockScreen() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // 오늘 날짜의 데이터만 빠르게 로드
+      final today = DateTime.now();
+      _pdsPlans = await _databaseService.getPDSPlansForDate(today);
+      print('Lock screen data loaded: ${_pdsPlans.length} plans');
+    } catch (e) {
+      _error = e.toString();
+      print('Error loading lock screen data: $e');
+      // 오류 시 빈 리스트로 설정
+      _pdsPlans = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   PDSPlan? getPDSPlan(DateTime date) {
     final dateStr = date.toIso8601String().split('T')[0];
     try {

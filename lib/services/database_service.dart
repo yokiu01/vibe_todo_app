@@ -383,6 +383,22 @@ class DatabaseService {
     return List.generate(maps.length, (i) => PDSPlan.fromMap(maps[i]));
   }
 
+  // 락 스크린용 최적화된 데이터 로딩 - 오늘 날짜만
+  Future<List<PDSPlan>> getPDSPlansForDate(DateTime date) async {
+    final db = await database;
+    final dateStr = date.toIso8601String().split('T')[0];
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'pds_plans',
+      where: 'date = ?',
+      whereArgs: [dateStr],
+      orderBy: 'created_at DESC',
+    );
+    
+    print('Database: Loaded ${maps.length} PDS plans for date $dateStr');
+    return List.generate(maps.length, (i) => PDSPlan.fromMap(maps[i]));
+  }
+
   Future<PDSPlan> createPDSPlan(PDSPlan plan) async {
     final db = await database;
     await db.insert('pds_plans', plan.toMap());

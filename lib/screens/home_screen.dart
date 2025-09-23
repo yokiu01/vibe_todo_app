@@ -5,6 +5,10 @@ import '../providers/item_provider.dart';
 import '../models/item.dart';
 import '../services/notion_auth_service.dart';
 import '../models/notion_task.dart';
+import '../utils/app_colors.dart';
+import '../widgets/improved_empty_state.dart';
+import '../widgets/loading_skeleton.dart';
+import '../widgets/interactive_button.dart' as custom;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -49,132 +53,71 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _checkAuthentication() async {
-    final isAuth = await _authService.isAuthenticated();
-    setState(() {
-      _isAuthenticated = isAuth;
-    });
-    if (isAuth) {
-      _loadNotionData();
+    try {
+      // API 키 먼저 로드
+      final apiKey = await _authService.getApiKey();
+      final isAuth = apiKey != null && apiKey.isNotEmpty;
+
+      print('🔑 Authentication check - API Key exists: $isAuth');
+      print('🔑 API Key length: ${apiKey?.length ?? 0}');
+
+      setState(() {
+        _isAuthenticated = isAuth;
+      });
+
+      if (isAuth) {
+        print('✅ Authentication successful - loading data');
+        await _loadNotionData();
+      } else {
+        print('❌ No authentication - showing setup guide');
+        // API 키가 없으면 빈 데이터로 초기화
+        setState(() {
+          _notionTasks = [];
+          _notionProjects = [];
+          _pinnedNotes = [];
+          _areaItems = [];
+          _resourceItems = [];
+        });
+      }
+    } catch (e) {
+      print('❌ Authentication check failed: $e');
+      setState(() {
+        _isAuthenticated = false;
+        _notionTasks = [];
+        _notionProjects = [];
+        _pinnedNotes = [];
+        _areaItems = [];
+        _resourceItems = [];
+      });
     }
   }
 
   Future<void> _loadNotionData() async {
+    if (_isLoading) return; // Prevent multiple simultaneous loads
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // 오늘 날짜 할일 가져오기 (TODO 데이터베이스에서 오늘 날짜인 항목들)
-      final today = DateTime.now();
-      final todayStr = today.toIso8601String().split('T')[0]; // YYYY-MM-DD 형식
-      
-      final todayTasksData = await _authService.apiService!.queryDatabase(
-        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
-        {
-          "property": "날짜",
-          "date": {
-            "equals": todayStr
-          }
-        }
-      );
-      final todayTasks = todayTasksData.map((data) => NotionTask.fromNotion(data)).toList();
+      // 병렬로 모든 데이터를 가져오기
+      final results = await Future.wait([
+        // 오늘 날짜 할일 가져오기
+        _loadTodayTasks(),
+        // 고정된 노트 가져오기
+        _loadPinnedNotes(),
+        // 진행중인 프로젝트 가져오기
+        _loadActiveProjects(),
+        // 영역·자원 데이터베이스 가져오기
+        _loadAreaResourceData(),
+      ]);
 
-      // 고정된 노트 가져오기 (노트 데이터베이스에서 '고정됨' 체크박스가 활성화된 것들)
-      final pinnedNotesData = await _authService.apiService!.queryDatabase(
-        '1159f5e4a81180e3a9f2fdf6634730e6', // MEMO_DB_ID
-        {
-          "property": "고정됨",
-          "checkbox": {
-            "equals": true
-          }
-        }
-      );
-      final pinnedNotes = pinnedNotesData.map((data) => NotionTask.fromNotion(data)).toList();
-
-      // 진행중인 프로젝트 가져오기 (프로젝트 데이터베이스에서 상태가 '진행 중'이거나 '시작 안 함'인 것들)
-      final projectsData = await _authService.apiService!.queryDatabase(
-        '1159f5e4a81180019f29cdd24d369230', // PROJECT_DB_ID
-        {
-          "or": [
-            {
-              "property": "상태",
-              "status": {
-                "equals": "진행 중"
-              }
-            },
-            {
-              "property": "상태", 
-              "status": {
-                "equals": "시작 안 함"
-              }
-            }
-          ]
-        }
-      );
-      final activeProjects = projectsData.map((data) => NotionTask.fromNotion(data)).toList();
-
-      // 영역·자원 데이터베이스에서 직접 데이터 가져오기
-      print('🔍 영역·자원 데이터베이스 로딩 시작...');
-      final areaResourceData = await _authService.apiService!.queryDatabase(
-        '1159f5e4a81180d1ab17fa79bb0cf0f4', // 영역·자원 데이터베이스 ID
-        null
-      );
-      print('📊 영역·자원 데이터베이스 응답: ${areaResourceData.length}개 항목');
-      
-      // 첫 번째 항목의 구조 확인
-      if (areaResourceData.isNotEmpty) {
-        print('🔍 첫 번째 항목 구조:');
-        print('  - 전체 데이터: ${areaResourceData[0]}');
-        print('  - properties: ${areaResourceData[0]['properties']}');
-        
-        final properties = areaResourceData[0]['properties'] as Map<String, dynamic>? ?? {};
-        print('  - properties 키들: ${properties.keys.toList()}');
-        
-        // '상태' 속성이 있는지 확인
-        if (properties.containsKey('상태')) {
-          final typeProperty = properties['상태'] as Map<String, dynamic>? ?? {};
-          print('  - 상태 속성: $typeProperty');
-          print('  - 상태 속성 키들: ${typeProperty.keys.toList()}');
-          
-          if (typeProperty.containsKey('status')) {
-            final statusValue = typeProperty['status'] as Map<String, dynamic>? ?? {};
-            print('  - status 값: $statusValue');
-            print('  - status 키들: ${statusValue.keys.toList()}');
-            
-            if (statusValue.containsKey('name')) {
-              final typeName = statusValue['name'] as String? ?? '';
-              print('  - 실제 상태명: "$typeName"');
-            }
-          }
-        } else {
-          print('  - "상태" 속성이 없습니다!');
-        }
-      } else {
-        print('⚠️ 영역·자원 데이터베이스가 비어있습니다.');
-      }
-
-      // 영역과 자원으로 분리
-      final areas = areaResourceData.where((data) {
-        final properties = data['properties'] as Map<String, dynamic>? ?? {};
-        final typeProperty = properties['상태'] as Map<String, dynamic>? ?? {};
-        final statusValue = typeProperty['status'] as Map<String, dynamic>? ?? {};
-        final typeName = statusValue['name'] as String? ?? '';
-        print('🔍 영역 필터링 - 상태명: "$typeName"');
-        return typeName == '영역';
-      }).map((data) => NotionTask.fromNotion(data)).toList();
-
-      final resources = areaResourceData.where((data) {
-        final properties = data['properties'] as Map<String, dynamic>? ?? {};
-        final typeProperty = properties['상태'] as Map<String, dynamic>? ?? {};
-        final statusValue = typeProperty['status'] as Map<String, dynamic>? ?? {};
-        final typeName = statusValue['name'] as String? ?? '';
-        print('🔍 자원 필터링 - 상태명: "$typeName"');
-        return typeName == '자원';
-      }).map((data) => NotionTask.fromNotion(data)).toList();
-      
-      print('📈 최종 결과:');
-      print('  - 영역: ${areas.length}개');
-      print('  - 자원: ${resources.length}개');
+      final todayTasks = results[0] as List<NotionTask>;
+      final pinnedNotes = results[1] as List<NotionTask>;
+      final activeProjects = results[2] as List<NotionTask>;
+      final areaResourceTuple = results[3] as List<List<NotionTask>>;
+      final areas = areaResourceTuple[0];
+      final resources = areaResourceTuple[1];
 
       setState(() {
         _notionTasks = todayTasks;
@@ -201,6 +144,110 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<List<NotionTask>> _loadTodayTasks() async {
+    try {
+      final today = DateTime.now();
+      final todayStr = today.toIso8601String().split('T')[0]; // YYYY-MM-DD 형식
+
+      final todayTasksData = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
+        {
+          "property": "날짜",
+          "date": {
+            "equals": todayStr
+          }
+        }
+      );
+      return todayTasksData.map((data) => NotionTask.fromNotion(data)).toList();
+    } catch (e) {
+      print('Failed to load today tasks: $e');
+      return [];
+    }
+  }
+
+  Future<List<NotionTask>> _loadPinnedNotes() async {
+    try {
+      final pinnedNotesData = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180e3a9f2fdf6634730e6', // MEMO_DB_ID
+        {
+          "property": "고정됨",
+          "checkbox": {
+            "equals": true
+          }
+        }
+      );
+      return pinnedNotesData.map((data) => NotionTask.fromNotion(data)).toList();
+    } catch (e) {
+      print('Failed to load pinned notes: $e');
+      return [];
+    }
+  }
+
+  Future<List<NotionTask>> _loadActiveProjects() async {
+    try {
+      final projectsData = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180019f29cdd24d369230', // PROJECT_DB_ID
+        {
+          "or": [
+            {
+              "property": "상태",
+              "status": {
+                "equals": "진행 중"
+              }
+            },
+            {
+              "property": "상태",
+              "status": {
+                "equals": "시작 안 함"
+              }
+            }
+          ]
+        }
+      );
+      return projectsData.map((data) => NotionTask.fromNotion(data)).toList();
+    } catch (e) {
+      print('Failed to load active projects: $e');
+      return [];
+    }
+  }
+
+  Future<List<List<NotionTask>>> _loadAreaResourceData() async {
+    try {
+      final areaResourceData = await _authService.apiService!.queryDatabase(
+        '1159f5e4a81180d1ab17fa79bb0cf0f4', // 영역·자원 데이터베이스 ID
+        null
+      );
+
+      // 영역과 자원으로 분리
+      final areas = <NotionTask>[];
+      final resources = <NotionTask>[];
+
+      for (final data in areaResourceData) {
+        try {
+          final properties = data['properties'] as Map<String, dynamic>? ?? {};
+          final typeProperty = properties['상태'] as Map<String, dynamic>? ?? {};
+          final statusValue = typeProperty['status'] as Map<String, dynamic>? ?? {};
+          final typeName = statusValue['name'] as String? ?? '';
+
+          final task = NotionTask.fromNotion(data);
+
+          if (typeName == '영역') {
+            areas.add(task);
+          } else if (typeName == '자원') {
+            resources.add(task);
+          }
+        } catch (e) {
+          print('Failed to parse area/resource item: $e');
+        }
+      }
+
+      return [areas, resources];
+    } catch (e) {
+      print('Failed to load area/resource data: $e');
+      return [[], []];
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -209,8 +256,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    print('🏠 HomeScreen: Building HomeScreen widget');
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -228,11 +276,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
         border: Border(
-          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+          bottom: BorderSide(color: AppColors.borderColor),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,17 +297,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primaryBrown.withOpacity(0.1),
+                      AppColors.primaryBrownLight.withOpacity(0.1),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.home,
-                  color: Color(0xFF2563EB),
+                  color: AppColors.primaryBrown,
                   size: 24,
                 ),
               ),
               const SizedBox(width: 16),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -261,14 +321,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     Text(
                       '오늘의 계획과 프로젝트 관리',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF64748B),
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -284,44 +344,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildTabBar() {
     return Container(
-      color: Colors.white,
+      color: AppColors.cardBackground,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: TabBar(
         controller: _tabController,
         isScrollable: false,
         indicator: BoxDecoration(
-          color: const Color(0xFF2563EB),
-          borderRadius: BorderRadius.circular(10),
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primaryBrown,
+              AppColors.primaryBrownLight,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBrown.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: Colors.white,
-        unselectedLabelColor: const Color(0xFF2563EB),
+        unselectedLabelColor: AppColors.primaryBrown,
         labelStyle: const TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.bold,
         ),
         unselectedLabelStyle: const TextStyle(
           fontSize: 14,
-          fontWeight: FontWeight.normal,
+          fontWeight: FontWeight.w500,
         ),
         labelPadding: EdgeInsets.zero,
         tabs: [
-          for (final t in _tabs)
+          for (int i = 0; i < _tabs.length; i++)
             Tab(
-              child: SizedBox.expand(
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (t.icon != null) t.icon!,
-                      if (t.icon != null) const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          t.text ?? '',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                child: SizedBox.expand(
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedScale(
+                          scale: _currentTabIndex == i ? 1.1 : 1.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: _tabs[i].icon ?? Container(),
                         ),
-                      ),
-                    ],
+                        if (_tabs[i].icon != null) const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            _tabs[i].text ?? '',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: MediaQuery.of(context).size.width < 400 ? 10 : 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -366,13 +449,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     color: Colors.grey[400],
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Notion API 키를 설정하면\n오늘의 할일을 볼 수 있습니다.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
+                  Column(
+                    children: [
+                      const Text(
+                        'Notion API 키를 설정하면\n오늘의 할일을 볼 수 있습니다.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: () {
+                          // 설정 화면으로 이동 (설정 탭으로 변경)
+                          DefaultTabController.of(context)?.animateTo(4); // 설정 탭 인덱스
+                        },
+                        child: const Text('API 키 설정하기'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -383,21 +478,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text(
-              '데이터를 불러오는 중...',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
+      return const SkeletonList(
+        itemCount: 3,
+        itemHeight: 120,
       );
     }
 
@@ -405,6 +488,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onRefresh: _loadNotionData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 20),
         child: _buildNotionTaskList(
           title: '📅 오늘의 할일',
           subtitle: DateFormat('M월 d일 (E)', 'ko').format(DateTime.now()),
@@ -454,21 +538,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text(
-              '데이터를 불러오는 중...',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
+      return const SkeletonList(
+        itemCount: 3,
+        itemHeight: 120,
       );
     }
 
@@ -482,6 +554,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 20),
         child: _buildNotionTaskList(
           title: '📌 고정된 노트',
           subtitle: '중요한 내용을 고정해보세요',
@@ -531,21 +604,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text(
-              '데이터를 불러오는 중...',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
+      return const SkeletonList(
+        itemCount: 3,
+        itemHeight: 120,
       );
     }
 
@@ -553,6 +614,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onRefresh: _loadNotionData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 20),
         child: _buildNotionTaskList(
           title: '💼 프로젝트 데이터베이스',
           subtitle: '모든 프로젝트 관리',
@@ -602,21 +664,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text(
-              '데이터를 불러오는 중...',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
+      return const SkeletonList(
+        itemCount: 3,
+        itemHeight: 120,
       );
     }
 
@@ -624,6 +674,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onRefresh: _loadNotionData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 20),
         child: _buildNotionTaskList(
           title: '🏢 영역자원데이터베이스',
           subtitle: '영역 관리 목록',
@@ -673,21 +724,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text(
-              '데이터를 불러오는 중...',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
+      return const SkeletonList(
+        itemCount: 3,
+        itemHeight: 120,
       );
     }
 
@@ -695,6 +734,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onRefresh: _loadNotionData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 20),
         child: _buildNotionTaskList(
           title: '📚 영역자원데이터베이스',
           subtitle: '자원 및 참고 자료',
@@ -723,21 +763,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+                  color: Color(0xFF3C2A21),
                 ),
               ),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  color: const Color(0xFF8B7355).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '${items.length}개',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF3B82F6),
+                    color: Color(0xFF8B7355),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -763,14 +803,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Icon(
                           Icons.inbox_outlined,
                           size: 64,
-                          color: const Color(0xFFE5E7EB),
+                          color: const Color(0xFF9C8B73),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           emptyMessage,
                           style: const TextStyle(
                             fontSize: 16,
-                            color: Color(0xFF9CA3AF),
+                            color: Color(0xFF9C8B73),
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -797,7 +837,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFFDF6E3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFFE2E8F0),
@@ -956,10 +996,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     required List<NotionTask> tasks,
     required String emptyMessage,
   }) {
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -968,21 +1009,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+                  color: Color(0xFF3C2A21),
                 ),
               ),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  color: const Color(0xFF8B7355).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '${tasks.length}개',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF3B82F6),
+                    color: Color(0xFF8B7355),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -999,31 +1040,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 16),
           tasks.isEmpty
-              ? Container(
-                  height: 300,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 64,
-                          color: const Color(0xFFE5E7EB),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          emptyMessage,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFF9CA3AF),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
+              ? ImprovedEmptyState(
+                  title: _getEmptyStateTitle(emptyMessage),
+                  subtitle: _getEmptyStateSubtitle(emptyMessage),
+                  emoji: _getEmptyStateEmoji(emptyMessage),
+                  ctaText: _getEmptyStateCta(emptyMessage),
+                  onCtaPressed: _getEmptyStateAction(emptyMessage),
                 )
               : Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: tasks.map((task) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -1044,10 +1069,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFFDF6E3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFFE2E8F0),
+            color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFFDDD4C0),
           ),
           boxShadow: [
             BoxShadow(
@@ -1057,9 +1082,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ],
         ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
           Row(
             children: [
               Container(
@@ -1146,7 +1172,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ],
           ),
         ],
-      ),
+        ),
       ),
     );
   }
@@ -1210,8 +1236,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFFF8FAFC),
-                Color(0xFFE2E8F0),
+                Color(0xFFF5F1E8),
+                Color(0xFFDDD4C0),
               ],
             ),
           ),
@@ -1237,6 +1263,73 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         backgroundColor: Colors.red,
       ),
     );
+  }
+
+  /// Empty state content helpers
+  String _getEmptyStateTitle(String emptyMessage) {
+    if (emptyMessage.contains('오늘')) {
+      return '오늘은 깨끗한 하루! ✨';
+    } else if (emptyMessage.contains('고정')) {
+      return '아직 고정된 노트가 없어요 📌';
+    } else if (emptyMessage.contains('프로젝트')) {
+      return '새로운 프로젝트를 시작해보세요 🚀';
+    } else if (emptyMessage.contains('영역')) {
+      return '영역을 설정해보세요 🏢';
+    } else if (emptyMessage.contains('자원')) {
+      return '유용한 자원을 모아보세요 📚';
+    }
+    return '아직 내용이 없어요';
+  }
+
+  String _getEmptyStateSubtitle(String emptyMessage) {
+    if (emptyMessage.contains('오늘')) {
+      return '첫 번째 할일을 추가하고 하루를 시작해보세요';
+    } else if (emptyMessage.contains('고정')) {
+      return '중요한 노트를 고정하여 빠르게 접근하세요';
+    } else if (emptyMessage.contains('프로젝트')) {
+      return '목표를 달성하기 위한 새로운 프로젝트를 만들어보세요';
+    } else if (emptyMessage.contains('영역')) {
+      return '관리할 영역을 추가하여 체계적으로 정리하세요';
+    } else if (emptyMessage.contains('자원')) {
+      return '도움이 되는 자료와 참고 링크를 수집하세요';
+    }
+    return '새로운 항목을 추가해보세요';
+  }
+
+  String _getEmptyStateEmoji(String emptyMessage) {
+    if (emptyMessage.contains('오늘')) {
+      return '✨';
+    } else if (emptyMessage.contains('고정')) {
+      return '📌';
+    } else if (emptyMessage.contains('프로젝트')) {
+      return '🚀';
+    } else if (emptyMessage.contains('영역')) {
+      return '🏢';
+    } else if (emptyMessage.contains('자원')) {
+      return '📚';
+    }
+    return '📝';
+  }
+
+  String _getEmptyStateCta(String emptyMessage) {
+    if (emptyMessage.contains('오늘')) {
+      return '할일 추가하기';
+    } else if (emptyMessage.contains('고정')) {
+      return '노트 고정하기';
+    } else if (emptyMessage.contains('프로젝트')) {
+      return '프로젝트 만들기';
+    } else if (emptyMessage.contains('영역')) {
+      return '영역 추가하기';
+    } else if (emptyMessage.contains('자원')) {
+      return '자원 수집하기';
+    }
+    return '추가하기';
+  }
+
+  VoidCallback? _getEmptyStateAction(String emptyMessage) {
+    // For now, return null as we don't have specific actions implemented
+    // TODO: Implement specific actions for each empty state
+    return null;
   }
 }
 
@@ -1507,8 +1600,8 @@ class _TaskContentViewState extends State<_TaskContentView> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFF2563EB),
-                    Color(0xFF1D4ED8),
+                    Color(0xFF8B7355),
+                    Color(0xFF6B5B47),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(0),
@@ -1530,7 +1623,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
                     ),
                     child: const Icon(
                       Icons.description,
-                      color: Colors.white,
+                      color: const Color(0xFFFDF6E3),
                       size: 24,
                     ),
                   ),
@@ -1544,7 +1637,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: const Color(0xFFFDF6E3),
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -1561,7 +1654,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
                               widget.task.status!,
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: Colors.white,
+                                color: const Color(0xFFFDF6E3),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -1579,7 +1672,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
                       ),
                       child: const Icon(
                         Icons.close,
-                        color: Colors.white,
+                        color: const Color(0xFFFDF6E3),
                         size: 20,
                       ),
                     ),
@@ -1596,7 +1689,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B7355)),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -1612,7 +1705,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
                   : Container(
                       margin: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: const Color(0xFFFDF6E3),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -1635,15 +1728,15 @@ class _TaskContentViewState extends State<_TaskContentView> {
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
+                                  color: const Color(0xFFF5F1E8),
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  border: Border.all(color: const Color(0xFFDDD4C0)),
                                 ),
                                 child: Text(
                                   widget.task.description!,
                                   style: const TextStyle(
                                     fontSize: 16,
-                                    color: Color(0xFF1E293B),
+                                    color: Color(0xFF3C2A21),
                                     height: 1.6,
                                   ),
                                 ),
@@ -1673,9 +1766,9 @@ class _TaskContentViewState extends State<_TaskContentView> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
+                                color: const Color(0xFFF5F1E8),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(color: const Color(0xFFDDD4C0)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1699,9 +1792,9 @@ class _TaskContentViewState extends State<_TaskContentView> {
                                       child: Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: Colors.white,
+                                          color: const Color(0xFFFDF6E3),
                                           borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                          border: Border.all(color: const Color(0xFFDDD4C0)),
                                         ),
                                         child: Row(
                                           children: [
@@ -1806,9 +1899,9 @@ class _TaskContentViewState extends State<_TaskContentView> {
                                   margin: const EdgeInsets.only(bottom: 12),
                                   padding: const EdgeInsets.all(20),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF8FAFC),
+                                    color: const Color(0xFFF5F1E8),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    border: Border.all(color: const Color(0xFFDDD4C0)),
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1818,14 +1911,14 @@ class _TaskContentViewState extends State<_TaskContentView> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFF2563EB).withOpacity(0.1),
+                                              color: const Color(0xFF8B7355).withOpacity(0.1),
                                               borderRadius: BorderRadius.circular(8),
                                             ),
                                             child: Text(
                                               '블록 ${index + 1}',
                                               style: const TextStyle(
                                                 fontSize: 12,
-                                                color: Color(0xFF2563EB),
+                                                color: Color(0xFF8B7355),
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
@@ -1837,7 +1930,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
                                         content,
                                         style: const TextStyle(
                                           fontSize: 16,
-                                          color: Color(0xFF1E293B),
+                                          color: Color(0xFF3C2A21),
                                           height: 1.6,
                                         ),
                                       ),
@@ -1853,9 +1946,9 @@ class _TaskContentViewState extends State<_TaskContentView> {
                             const SizedBox(height: 12),
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: const Color(0xFFFDF6E3),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(color: const Color(0xFFDDD4C0)),
                               ),
                               child: TextField(
                                 controller: _newContentController,
@@ -1887,7 +1980,7 @@ class _TaskContentViewState extends State<_TaskContentView> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFFFDF6E3),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(16),
                   bottomRight: Radius.circular(16),
@@ -1904,54 +1997,26 @@ class _TaskContentViewState extends State<_TaskContentView> {
                 children: [
                   if (_isEditing) ...[
                     Expanded(
-                      child: ElevatedButton.icon(
+                      child: custom.InteractiveButton(
+                        text: _isAddingContent ? '저장 중...' : '변경사항 저장',
                         onPressed: _isAddingContent ? null : _saveTaskChanges,
-                        icon: _isAddingContent
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.save, size: 20),
-                        label: Text(_isAddingContent ? '저장 중...' : '변경사항 저장'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
+                        style: custom.InteractiveButtonStyle.success,
+                        isLoading: _isAddingContent,
+                        icon: Icons.save,
+                        height: 52,
+                        isEnabled: !_isAddingContent,
                       ),
                     ),
                   ] else ...[
                     Expanded(
-                      child: ElevatedButton.icon(
+                      child: custom.InteractiveButton(
+                        text: _isAddingContent ? '추가 중...' : '내용 추가',
                         onPressed: _isAddingContent ? null : _addNewContent,
-                        icon: _isAddingContent
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.add, size: 20),
-                        label: Text(_isAddingContent ? '추가 중...' : '내용 추가'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
+                        style: custom.InteractiveButtonStyle.primary,
+                        isLoading: _isAddingContent,
+                        icon: Icons.add,
+                        height: 52,
+                        isEnabled: !_isAddingContent,
                       ),
                     ),
                   ],
