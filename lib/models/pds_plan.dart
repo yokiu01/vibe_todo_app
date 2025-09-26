@@ -4,6 +4,10 @@ class PDSPlan {
   final Map<String, String>? freeformPlans; // {"03:00": "계획 내용", "04:00": "..."}
   final Map<String, String>? actualActivities; // {"03:00": "실제 한 일", "04:00": "..."}
   final String? seeNotes; // 하루 회고 메모
+  final String? theme; // 테마
+  final String? goalAndExpectation; // 목표와 기대
+  final String? reflection; // 반성
+  final String? tomorrowPreparation; // 내일 준비
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -13,6 +17,10 @@ class PDSPlan {
     this.freeformPlans,
     this.actualActivities,
     this.seeNotes,
+    this.theme,
+    this.goalAndExpectation,
+    this.reflection,
+    this.tomorrowPreparation,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -23,6 +31,10 @@ class PDSPlan {
     Map<String, String>? freeformPlans,
     Map<String, String>? actualActivities,
     String? seeNotes,
+    String? theme,
+    String? goalAndExpectation,
+    String? reflection,
+    String? tomorrowPreparation,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -32,6 +44,10 @@ class PDSPlan {
       freeformPlans: freeformPlans ?? this.freeformPlans,
       actualActivities: actualActivities ?? this.actualActivities,
       seeNotes: seeNotes ?? this.seeNotes,
+      theme: theme ?? this.theme,
+      goalAndExpectation: goalAndExpectation ?? this.goalAndExpectation,
+      reflection: reflection ?? this.reflection,
+      tomorrowPreparation: tomorrowPreparation ?? this.tomorrowPreparation,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -44,6 +60,10 @@ class PDSPlan {
       'freeform_plans': freeformPlans != null ? _mapToJson(freeformPlans!) : null,
       'actual_activities': actualActivities != null ? _mapToJson(actualActivities!) : null,
       'see_notes': seeNotes,
+      'theme': theme,
+      'goal_and_expectation': goalAndExpectation,
+      'reflection': reflection,
+      'tomorrow_preparation': tomorrowPreparation,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -56,6 +76,10 @@ class PDSPlan {
       freeformPlans: map['freeform_plans'] != null ? _jsonToMap(map['freeform_plans']) : null,
       actualActivities: map['actual_activities'] != null ? _jsonToMap(map['actual_activities']) : null,
       seeNotes: map['see_notes'],
+      theme: map['theme'],
+      goalAndExpectation: map['goal_and_expectation'],
+      reflection: map['reflection'],
+      tomorrowPreparation: map['tomorrow_preparation'],
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
     );

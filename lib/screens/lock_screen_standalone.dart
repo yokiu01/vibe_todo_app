@@ -6,6 +6,82 @@ import '../providers/pds_diary_provider.dart';
 import '../models/pds_plan.dart';
 import '../services/lock_screen_service.dart';
 
+// Korean Localization Helper
+class KoreanLocalizer {
+  static String formatDate(DateTime date) {
+    const monthNames = [
+      '1월', '2월', '3월', '4월', '5월', '6월',
+      '7월', '8월', '9월', '10월', '11월', '12월'
+    ];
+    const dayNames = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+
+    final month = monthNames[date.month - 1];
+    final day = '${date.day}일';
+    final weekday = dayNames[date.weekday - 1];
+
+    return '$month $day $weekday';
+  }
+
+  static String formatTime(DateTime time) {
+    final hour = time.hour;
+    final minute = time.minute;
+    final period = hour < 12 ? '오전' : '오후';
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '$period $displayHour:${minute.toString().padLeft(2, '0')}';
+  }
+
+  static String formatTimeRange(DateTime start, DateTime end) {
+    return '${formatTime(start)} - ${formatTime(end)}';
+  }
+}
+
+// 메인 앱 화면과 동일한 색상 체계를 적용한 잠금화면
+class LockScreenColors {
+  // 메인 앱과 동일한 베이지/크림 배경
+  static const backgroundColor = Color(0xFFF5EFE7);  // 메인 앱 배경색
+
+  // 텍스트 색상 (어두운 색 기반)
+  static const textPrimary = Color(0xFF3C2A21);      // 진한 갈색 텍스트
+  static const textSecondary = Color(0xFF8B7355);    // 메인 primary 색상
+  static const textTertiary = Color(0xFF9E8B7A);     // 연한 갈색
+
+  // 카드/컨테이너 배경
+  static const cardBackground = Color(0xFFFFFFFF);   // 흰색 카드 배경
+  static const cardBorder = Color(0xFFE8DCC6);       // 연한 베이지 테두리
+  static const cardShadow = Color(0x0F000000);       // 연한 그림자
+
+  // 버튼 색상
+  static const buttonBackground = Color(0xFFFFFFFF); // 흰색 버튼 배경
+  static const buttonBorder = Color(0xFFE8DCC6);     // 버튼 테두리
+  static const buttonIcon = Color(0xFF8B7355);       // 버튼 아이콘
+  static const buttonText = Color(0xFF3C2A21);       // 버튼 텍스트
+
+  // 강조 색상
+  static const accentBackground = Color(0xFF8B7355); // 강조 배경
+  static const accentText = Color(0xFFFFFFFF);       // 강조 텍스트
+}
+
+// Simple PDS Plan Item for Lock Screen - View Only
+class LockScreenPlanItem {
+  final String id;
+  final String title;
+  final DateTime startTime;
+  final DateTime endTime;
+  final String? location;
+  final String type;
+  final String status;
+
+  LockScreenPlanItem({
+    required this.id,
+    required this.title,
+    required this.startTime,
+    required this.endTime,
+    this.location,
+    required this.type,
+    required this.status,
+  });
+}
+
 class LockScreenStandalone extends StatefulWidget {
   const LockScreenStandalone({super.key});
 
@@ -21,7 +97,6 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
   late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  bool _canEdit = false;
   late ScrollController _scrollController;
 
   @override
@@ -29,35 +104,26 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     super.initState();
     _scrollController = ScrollController();
     _initializeAnimations();
-    _checkEditPermission();
     _loadData();
-    _scrollToCurrentTime();
     _setupUI();
-    
-    // 락 스크린 전용 초기화 (빠른 시작)
     _initializeLockScreenOnly();
   }
 
   void _initializeLockScreenOnly() {
     print('Lock screen standalone initialized - fast mode');
-    // 락 스크린에 필요한 최소한의 초기화만 수행
   }
 
   void _setupUI() {
-    // 전체화면 설정
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    // 세로 방향 고정
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-    // 시스템 UI 스타일 설정
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
       systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.dark,
     ));
   }
-
 
   void _initializeAnimations() {
     _fadeController = AnimationController(
@@ -68,6 +134,7 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
+
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -88,65 +155,24 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     _slideController.forward();
   }
 
-  Future<void> _checkEditPermission() async {
-    final canEdit = await LockScreenService.isLockScreenEditEnabled();
-    setState(() {
-      _canEdit = canEdit;
-    });
-  }
-
   Future<void> _loadData() async {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         try {
-          // 락 스크린용 최소한의 데이터만 로드
           await context.read<PDSDiaryProvider>().loadPDSPlansForLockScreen();
           print('Lock screen data loaded - fast mode');
         } catch (e) {
           print('Error loading lock screen data: $e');
-          // 오류 시에도 기본 데이터로 표시
-          _loadFallbackData();
         }
-      }
-    });
-  }
-
-  void _loadFallbackData() {
-    // 락 스크린용 기본 데이터 로드
-    print('Loading fallback data for lock screen');
-  }
-
-  void _scrollToCurrentTime() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        final currentHour = DateTime.now().hour;
-        final timeSlots = PDSPlan.generateTimeSlots();
-
-        int currentIndex = 0;
-        for (int i = 0; i < timeSlots.length; i++) {
-          if (timeSlots[i].hour24 == currentHour) {
-            currentIndex = i;
-            break;
-          }
-        }
-
-        // 현재 시간이 맨 위에 오도록 스크롤 (이미 정렬되어 있으므로 0으로 스크롤)
-        _scrollController.animateTo(
-          0.0,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
       }
     });
   }
 
   void _closeLockScreen() async {
     try {
-      // Android 잠금화면으로 돌아가기 위해 Activity를 종료
       await _channel.invokeMethod('closeLockScreen');
     } catch (e) {
       print('Error closing lock screen: $e');
-      // Activity를 종료하여 Android 잠금화면으로 돌아감
       SystemNavigator.pop();
     }
   }
@@ -159,23 +185,55 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     super.dispose();
   }
 
+  // Get today's events from PDS plan data - simple view only
+  List<LockScreenPlanItem> _getTodayEvents(PDSPlan? currentPlan) {
+    if (currentPlan == null) return [];
+
+    final events = <LockScreenPlanItem>[];
+    final now = DateTime.now();
+
+    // Convert freeform plans to schedule items
+    currentPlan.freeformPlans?.forEach((timeKey, planText) {
+      if (planText.isNotEmpty) {
+        final timeSlot = PDSPlan.generateTimeSlots()
+            .firstWhere((slot) => slot.key == timeKey, orElse: () => TimeSlot(
+              hour24: 9,
+              display: '9시',
+              display12: '오전 9:00',
+              key: 'am_9'
+            ));
+
+        final startTime = DateTime(now.year, now.month, now.day, timeSlot.hour24);
+        final endTime = startTime.add(const Duration(hours: 1));
+
+        // 완료 표시(✅) 제거하고 제목만 표시
+        String displayTitle = planText;
+        if (planText.startsWith('✅ ')) {
+          displayTitle = planText.substring(2).trim();
+        }
+
+        events.add(LockScreenPlanItem(
+          id: timeKey,
+          title: displayTitle,
+          startTime: startTime,
+          endTime: endTime,
+          type: 'work',
+          status: 'upcoming', // 모든 일정을 단순히 보기용으로 처리
+        ));
+      }
+    });
+
+    // Sort by start time
+    events.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return events;
+  }
+
   @override
   Widget build(BuildContext context) {
     print('🔒 LockScreenStandalone: Building LockScreenStandalone widget');
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F1E8),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF5F1E8),
-              Color(0xFFEFE7D3),
-              Color(0xFFDDD4C0),
-            ],
-          ),
-        ),
+        color: LockScreenColors.backgroundColor,
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
@@ -183,20 +241,17 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
               position: _slideAnimation,
               child: Column(
                 children: [
-                  // 상단 헤더
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: _buildHeader(),
-                  ),
-                  const SizedBox(height: 16),
-                  // 중간 스크롤 가능한 영역
+                  // 헤더
+                  _buildHeader(),
+                  const SizedBox(height: 32),
+                  // 단일 박스 내에 모든 일정 표시
                   Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildPlanDoSection(),
-                    ),
+                    child: _buildUnifiedEventsList(),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 32),
+                  // 하단 버튼들
+                  _buildBottomButtons(),
+                  const SizedBox(height: 48),
                 ],
               ),
             ),
@@ -206,26 +261,35 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     );
   }
 
+  // 헤더
   Widget _buildHeader() {
+    final now = DateTime.now();
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // 큰 시간 표시
           Text(
-            DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
+            DateFormat('H:mm').format(now),
             style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF3C2A21),
+              fontSize: 72,
+              fontWeight: FontWeight.w300,
+              color: LockScreenColors.textPrimary,
+              letterSpacing: -3.0,
+              height: 0.9,
             ),
           ),
-          IconButton(
-            onPressed: _closeLockScreen,
-            icon: const Icon(
-              Icons.close,
-              color: Color(0xFF8B7355),
-              size: 24,
+          const SizedBox(height: 8),
+          // 한국어 날짜
+          Text(
+            KoreanLocalizer.formatDate(now),
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+              color: LockScreenColors.textSecondary,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -233,567 +297,199 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     );
   }
 
-
-  Widget _buildPlanDoSection() {
+  // 단일 박스 내에 모든 일정 표시
+  Widget _buildUnifiedEventsList() {
     return Consumer<PDSDiaryProvider>(
       builder: (context, pdsProvider, child) {
         final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
-        final timeSlots = PDSPlan.generateTimeSlots();
-        final plannedActivities = currentPlan?.freeformPlans ?? {};
-        final actualActivities = currentPlan?.actualActivities ?? {};
-        final currentHour = DateTime.now().hour;
+        final todayEvents = _getTodayEvents(currentPlan);
 
-        // 모든 시간대를 표시하되, 현재 시간을 맨 위에
-        final allSlots = List<TimeSlot>.from(timeSlots);
-        allSlots.sort((a, b) {
-          if (a.hour24 == currentHour) return -1;
-          if (b.hour24 == currentHour) return 1;
-          return a.hour24.compareTo(b.hour24);
-        });
-
-        return _buildPerspectiveScrollView(
-          allSlots: allSlots,
-          plannedActivities: plannedActivities,
-          actualActivities: actualActivities,
-          currentHour: currentHour,
-        );
-      },
-    );
-  }
-
-  Widget _buildPerspectiveScrollView({
-    required List<TimeSlot> allSlots,
-    required Map<String, String> plannedActivities,
-    required Map<String, String> actualActivities,
-    required int currentHour,
-  }) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.6, // 화면의 60% 높이
-      child: Stack(
-        children: [
-          // 상단 페이드 효과
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 20,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0xFFF5F1E8).withOpacity(0.9),
-                    const Color(0xFFF5F1E8).withOpacity(0.0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          
-          // 하단 페이드 효과
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 20,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0xFFF5F1E8).withOpacity(0.0),
-                    const Color(0xFFF5F1E8).withOpacity(0.9),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          
-          // 스크롤 가능한 리스트
-          ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            itemCount: allSlots.length,
-            itemBuilder: (context, index) {
-              final slot = allSlots[index];
-              final planned = plannedActivities[slot.key] ?? '';
-              final actual = actualActivities[slot.key] ?? '';
-              final isCurrentTime = slot.hour24 == currentHour;
-              
-              return _buildPerspectiveCard(
-                slot: slot,
-                planned: planned,
-                actual: actual,
-                isCurrentTime: isCurrentTime,
-                index: index,
-                totalItems: allSlots.length,
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPerspectiveCard({
-    required TimeSlot slot,
-    required String planned,
-    required String actual,
-    required bool isCurrentTime,
-    required int index,
-    required int totalItems,
-  }) {
-    return AnimatedBuilder(
-      animation: _scrollController,
-      builder: (context, child) {
-        // 스크롤 위치에 따른 3D 효과 계산
-        final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
-        final itemHeight = 120.0; // 각 카드의 높이
-        final itemTop = index * itemHeight;
-        final itemCenter = itemTop + itemHeight / 2;
-        final viewportHeight = MediaQuery.of(context).size.height * 0.6;
-        final viewportCenter = viewportHeight / 2;
-        
-        // 화면 중앙으로부터의 거리 (정규화)
-        final distanceFromCenter = (itemCenter - scrollOffset - viewportCenter).abs() / viewportCenter;
-        
-        // 3D 효과 계산
-        final scale = (1.0 - distanceFromCenter * 0.3).clamp(0.7, 1.0);
-        final opacity = (1.0 - distanceFromCenter * 0.5).clamp(0.3, 1.0);
-        final rotationX = (distanceFromCenter * 0.1).clamp(0.0, 0.1);
-        
-        // 상단/하단 경계에서의 추가 페이드 효과
-        final itemBottom = itemTop + itemHeight;
-        final fadeTop = scrollOffset;
-        final fadeBottom = scrollOffset + viewportHeight;
-        
-        double fadeOpacity = 1.0;
-        if (itemTop < fadeTop + 50) {
-          fadeOpacity = ((itemTop - fadeTop + 50) / 50).clamp(0.0, 1.0);
-        } else if (itemBottom > fadeBottom - 50) {
-          fadeOpacity = ((fadeBottom - itemBottom + 50) / 50).clamp(0.0, 1.0);
+        if (todayEvents.isEmpty) {
+          return _buildEmptyState();
         }
-        
-        final finalOpacity = (opacity * fadeOpacity).clamp(0.0, 1.0);
-        
-        return Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.001) // 원근감을 위한 z축 변환
-            ..rotateX(rotationX)
-            ..scale(scale),
-          child: Opacity(
-            opacity: finalOpacity,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: isCurrentTime 
-                ? _buildCurrentTimeCard(slot, {slot.key: planned}, {slot.key: actual})
-                : _buildScheduleCard(slot, planned, actual, false),
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 32),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: LockScreenColors.cardBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: LockScreenColors.cardBorder,
+              width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: LockScreenColors.cardShadow,
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCurrentTimeCard(TimeSlot currentSlot, Map<String, String> plannedActivities, Map<String, String> actualActivities) {
-    final planned = plannedActivities[currentSlot.key] ?? '';
-    final actual = actualActivities[currentSlot.key] ?? '';
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF667eea),
-            const Color(0xFF764ba2),
-          ],
-          stops: const [0.0, 1.0],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF667eea).withOpacity(0.4),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-            spreadRadius: 0,
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-            spreadRadius: 0,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.access_time_rounded,
-                      size: 16,
-                      color: Colors.white.withOpacity(0.9),
+              // 헤더
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: LockScreenColors.accentBackground,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '지금',
-                      style: TextStyle(
-                        fontSize: 13,
+                    child: const Icon(
+                      Icons.today,
+                      size: 16,
+                      color: LockScreenColors.accentText,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    '오늘의 할일',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: LockScreenColors.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: LockScreenColors.textSecondary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${todayEvents.length}',
+                      style: const TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white.withOpacity(0.95),
-                        letterSpacing: 0.5,
+                        color: LockScreenColors.textSecondary,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const Spacer(),
-              Text(
-                currentSlot.display,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
+              const SizedBox(height: 16),
+
+              // 일정 리스트
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      ...todayEvents.map((event) => _buildSimpleEventCard(event)).toList(),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          if (planned.isNotEmpty) ...[
-            const Text(
-              '계획',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFFE8DCC6),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              planned,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                height: 1.3,
-              ),
-            ),
-            if (actual.isNotEmpty) const SizedBox(height: 12),
-          ],
-          if (actual.isNotEmpty) ...[
-            const Text(
-              '실제',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFFE8DCC6),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              actual,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFFF5F1E8),
-                height: 1.3,
-              ),
-            ),
-          ],
-          if (planned.isEmpty && actual.isEmpty) ...[
-            const Text(
-              '현재 시간대에 등록된 일정이 없습니다',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFFE8DCC6),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-          if (_canEdit) ...[
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () => _showDoEditDialog(currentSlot, planned, actual),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.edit,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      '편집',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildScheduleCard(TimeSlot slot, String planned, String actual, bool isHighlighted) {
-    final hasContent = planned.isNotEmpty || actual.isNotEmpty;
-    
+  // 간단한 일정 카드 - 완료 기능 없이 보기만
+  Widget _buildSimpleEventCard(LockScreenPlanItem event) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: hasContent 
-          ? Colors.white.withOpacity(0.95)
-          : Colors.white.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(20),
+        color: LockScreenColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasContent 
-            ? const Color(0xFFE0E7FF).withOpacity(0.8)
-            : Colors.white.withOpacity(0.3),
-          width: 1.5,
+          color: LockScreenColors.cardBorder,
+          width: 1,
         ),
-        boxShadow: hasContent ? [
+        boxShadow: [
           BoxShadow(
-            color: const Color(0xFF667eea).withOpacity(0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-            spreadRadius: 0,
-          ),
-        ] : [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: LockScreenColors.cardShadow,
             blurRadius: 4,
-            offset: const Offset(0, 1),
-            spreadRadius: 0,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
+          // 시간 표시
           Container(
-            width: 56,
-            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: hasContent ? [
-                  const Color(0xFF667eea).withOpacity(0.1),
-                  const Color(0xFF764ba2).withOpacity(0.1),
-                ] : [
-                  Colors.grey.withOpacity(0.1),
-                  Colors.grey.withOpacity(0.05),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: hasContent 
-                  ? const Color(0xFF667eea).withOpacity(0.2)
-                  : Colors.grey.withOpacity(0.2),
-                width: 1,
-              ),
+              color: LockScreenColors.textSecondary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${slot.hour24}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: hasContent 
-                      ? const Color(0xFF667eea)
-                      : Colors.grey.withOpacity(0.7),
-                  ),
-                ),
-                Text(
-                  slot.hour24 < 12 ? 'AM' : 'PM',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: hasContent 
-                      ? const Color(0xFF667eea).withOpacity(0.8)
-                      : Colors.grey.withOpacity(0.6),
-                  ),
-                ),
-              ],
+            child: Text(
+              KoreanLocalizer.formatTime(event.startTime),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: LockScreenColors.textSecondary,
+              ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
+
+          // 할일 제목
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (planned.isNotEmpty) ...[
-                  Text(
-                    planned,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: hasContent 
-                        ? const Color(0xFF1F2937)
-                        : Colors.grey.withOpacity(0.7),
-                      height: 1.4,
-                      letterSpacing: -0.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (actual.isNotEmpty) const SizedBox(height: 8),
-                ] else if (!hasContent) ...[
-                  Text(
-                    '일정 없음',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.withOpacity(0.6),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-                if (actual.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFF10B981).withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 14,
-                          color: const Color(0xFF10B981),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            actual,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF10B981),
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (_canEdit)
-            GestureDetector(
-              onTap: () => _showDoEditDialog(slot, planned, actual),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF667eea).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFF667eea).withOpacity(0.2),
-                    width: 1,
-                  ),
-                ),
-                child: Icon(
-                  Icons.edit_outlined,
-                  size: 16,
-                  color: const Color(0xFF667eea),
-                ),
+            child: Text(
+              event.title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: LockScreenColors.textPrimary,
               ),
             ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyStateCard() {
+  // 빈 상태
+  Widget _buildEmptyState() {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDF6E3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFEFE7D3),
-          width: 1,
-        ),
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const SizedBox(height: 60),
           Container(
-            width: 60,
-            height: 60,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFE7D3),
-              borderRadius: BorderRadius.circular(30),
+              color: LockScreenColors.cardBackground,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: LockScreenColors.cardBorder,
+                width: 1,
+              ),
             ),
             child: const Icon(
-              Icons.calendar_today_outlined,
-              size: 24,
-              color: Color(0xFF8B7355),
+              Icons.event_available_outlined,
+              size: 36,
+              color: LockScreenColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           const Text(
-            '오늘 등록된 일정이 없습니다',
+            '오늘은 여유로운 하루네요',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF3C2A21),
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: LockScreenColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
           const Text(
-            '계획을 세워보세요',
+            '새로운 일정을 추가해보세요',
             style: TextStyle(
               fontSize: 14,
-              color: Color(0xFF9C8B73),
+              fontWeight: FontWeight.w400,
+              color: LockScreenColors.textSecondary,
             ),
           ),
         ],
@@ -801,99 +497,122 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     );
   }
 
-
-  void _showDoEditDialog(TimeSlot slot, String planned, String actual) {
-    final TextEditingController actualController = TextEditingController(text: actual);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFFDF6E3),
-        title: Text(
-          '${slot.display} 실제 활동',
-          style: const TextStyle(color: Color(0xFF3C2A21)),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (planned.isNotEmpty) ...[
-              Text(
-                '계획: $planned',
-                style: const TextStyle(
-                  color: Color(0xFF8B7355),
-                  fontSize: 14,
+  // 하단 버튼들
+  Widget _buildBottomButtons() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 32),
+      child: Row(
+        children: [
+          // 닫기 버튼
+          Expanded(
+            child: GestureDetector(
+              onTap: _closeLockScreen,
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: LockScreenColors.buttonBackground,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: LockScreenColors.buttonBorder,
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: LockScreenColors.cardShadow,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.close,
+                      size: 24,
+                      color: LockScreenColors.buttonIcon,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '닫기',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: LockScreenColors.buttonText,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-            ],
-            TextField(
-              controller: actualController,
-              decoration: InputDecoration(
-                hintText: '실제로 한 일을 입력하세요',
-                hintStyle: const TextStyle(color: Color(0xFF9C8B73)),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF8B7355)),
-                ),
-                filled: true,
-                fillColor: const Color(0xFFEFE7D3),
-              ),
-              style: const TextStyle(color: Color(0xFF3C2A21)),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              '취소',
-              style: TextStyle(color: Color(0xFF8B7355)),
             ),
           ),
-          TextButton(
-            onPressed: () async {
-              final content = actualController.text.trim();
-              try {
-                await context.read<PDSDiaryProvider>().saveActualActivity(
-                  _selectedDate,
-                  slot.key,
-                  content,
-                );
-                Navigator.of(context).pop();
-                setState(() {}); // UI 업데이트
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('실제 활동이 저장되었습니다'),
-                    backgroundColor: Colors.green,
-                    duration: Duration(seconds: 1),
+          const SizedBox(width: 16),
+
+          // 앱열기 버튼 - 닫기 버튼과 동일한 스타일
+          Expanded(
+            child: GestureDetector(
+              onTap: _openMainApp,
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: LockScreenColors.buttonBackground,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: LockScreenColors.buttonBorder,
+                    width: 1,
                   ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('저장 실패: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text(
-              '저장',
-              style: TextStyle(color: Color(0xFF8B7355)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: LockScreenColors.cardShadow,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.launch,
+                      size: 24,
+                      color: LockScreenColors.buttonIcon,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '앱열기',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: LockScreenColors.buttonText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  // 메인 앱 열기 메서드 - 직접 앱 시작
+  void _openMainApp() async {
+    try {
+      // 잠금화면을 닫고 메인 앱으로 이동
+      await _channel.invokeMethod('openMainApp');
+    } catch (e) {
+      print('Error opening main app with native method: $e');
+      try {
+        // 대안 1: 잠금화면을 닫고 사용자가 직접 열도록 함
+        await _channel.invokeMethod('closeLockScreen');
+      } catch (e2) {
+        print('Error closing lock screen: $e2');
+        // 대안 2: Flutter Navigator로 메인 앱 화면으로 이동
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/');
+        }
+      }
+    }
   }
 }

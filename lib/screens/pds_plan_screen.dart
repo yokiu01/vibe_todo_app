@@ -259,52 +259,80 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
       builder: (context, pdsProvider, itemProvider, child) {
         final timeSlots = PDSPlan.generateTimeSlots();
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(8),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 좌측: 자유 입력 칸 (메모용)
-                Expanded(
-                  flex: 2,
-                  child: _buildLeftColumn(timeSlots),
-                ),
-                const SizedBox(width: 8),
-                // 중앙: 시간표
-                _buildCenterColumn(timeSlots),
-                const SizedBox(width: 8),
-                // 우측: 해당 날짜의 Notion 할일들
-                Expanded(
-                  flex: 2,
-                  child: _buildRightColumn(timeSlots),
-                ),
-              ],
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 좌측: 자유 입력 칸 (스크롤 가능)
+            Expanded(
+              flex: 2,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(8),
+                child: _buildLeftColumn(timeSlots),
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            // 중앙: 시간표 (고정)
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: _buildCenterColumn(timeSlots),
+            ),
+            const SizedBox(width: 8),
+            // 우측: 해당 날짜의 Notion 할일들 (드래그 가능)
+            Expanded(
+              flex: 2,
+              child: _buildRightColumn(timeSlots),
+            ),
+          ],
         );
       },
     );
   }
 
   Widget _buildLeftColumn(List<TimeSlot> timeSlots) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          _buildColumnHeader('📝 Plan'),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(6),
-            ),
+    return DragTarget<NotionTask>(
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            border: candidateData.isNotEmpty
+                ? Border.all(color: const Color(0xFF3B82F6), width: 2)
+                : null,
+            borderRadius: BorderRadius.circular(8),
+            color: candidateData.isNotEmpty
+                ? const Color(0xFFEFF6FF)
+                : null,
           ),
-          const SizedBox(height: 8),
-          ...timeSlots.map((slot) => _buildFreeformInput(slot)),
-        ],
-      ),
+          child: Column(
+            children: [
+              _buildColumnHeader('📝 Plan'),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: candidateData.isNotEmpty
+                    ? const Text(
+                        '여기에 드롭하세요',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF3B82F6),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              ...timeSlots.map((slot) => _buildFreeformInput(slot)),
+            ],
+          ),
+        );
+      },
+      onWillAccept: (data) => data != null,
+      onAccept: (NotionTask task) {
+        _handleTaskDrop(task);
+      },
     );
   }
 
@@ -373,8 +401,16 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 600, // 고정 높이 설정
+          const Text(
+            '← 좌측 Plan으로 드래그하세요',
+            style: TextStyle(
+              fontSize: 10,
+              color: Color(0xFF8B7355),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
             child: _isLoadingNotionTasks
                 ? const Center(
                     child: CircularProgressIndicator(
@@ -409,7 +445,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                         separatorBuilder: (context, index) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final task = _notionTasks[index];
-                          return _buildNotionTaskCard(task, index);
+                          return _buildDraggableNotionTaskCard(task, index);
                         },
                       ),
           ),
@@ -554,8 +590,29 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
     );
   }
 
+  /// 드래그 가능한 Notion 할일 카드 위젯
+  Widget _buildDraggableNotionTaskCard(NotionTask task, int index) {
+    return Draggable<NotionTask>(
+      data: task,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 200,
+          child: _buildNotionTaskCard(task, index, isDragging: true),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.5,
+        child: _buildNotionTaskCard(task, index),
+      ),
+      child: _buildNotionTaskCard(task, index),
+    );
+  }
+
   /// Notion 할일 카드 위젯
-  Widget _buildNotionTaskCard(NotionTask task, int index) {
+  Widget _buildNotionTaskCard(NotionTask task, int index, {bool isDragging = false}) {
     final isCompleted = task.isCompleted;
 
     return Container(
@@ -564,13 +621,13 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         color: isCompleted ? const Color(0xFFF0FDF4) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFFE2E8F0),
-          width: isCompleted ? 2 : 1,
+          color: isCompleted ? const Color(0xFF22C55E) : (isDragging ? const Color(0xFF3B82F6) : const Color(0xFFE2E8F0)),
+          width: isCompleted ? 2 : (isDragging ? 2 : 1),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
+            color: Colors.black.withOpacity(isDragging ? 0.2 : 0.05),
+            blurRadius: isDragging ? 8 : 4,
             offset: const Offset(0, 2),
           ),
         ],
@@ -927,6 +984,74 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         );
       }
     }
+  }
+
+  /// 드래그 앤 드롭 핸들러
+  void _handleTaskDrop(NotionTask task) {
+    print('PDS PLAN: 태스크 드롭됨 - ${task.title}');
+
+    // 현재 시간대에 해당하는 타임슬롯 찾기
+    String targetTimeSlot = _findBestTimeSlot(task);
+
+    // 기존 텍스트 가져오기
+    String existingText = _planControllers[targetTimeSlot]?.text ?? '';
+
+    // 새로운 텍스트 구성 - 기존 텍스트와 합치기
+    String newText = '';
+    if (existingText.isNotEmpty) {
+      newText = '$existingText\n• ${task.title}';
+    } else {
+      newText = '• ${task.title}';
+    }
+
+    // 컨트롤러 업데이트
+    _planControllers[targetTimeSlot]?.text = newText;
+
+    // 상태 업데이트
+    setState(() {
+      _freeformPlans[targetTimeSlot] = newText;
+    });
+
+    // 저장
+    _saveFreeformPlan(targetTimeSlot, newText);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${task.title}이 Plan에 추가되었습니다'),
+          backgroundColor: const Color(0xFF22C55E),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// 최적의 타임슬롯 찾기
+  String _findBestTimeSlot(NotionTask task) {
+    final timeSlots = PDSPlan.generateTimeSlots();
+
+    // 태스크에 시간이 설정되어 있으면 해당 시간 슬롯으로
+    if (task.dueDate != null) {
+      final taskHour = task.dueDate!.hour;
+      for (final slot in timeSlots) {
+        if (slot.hour24 == taskHour) {
+          return slot.key;
+        }
+      }
+    }
+
+    // 현재 시간과 가장 가까운 슬롯으로
+    final now = DateTime.now();
+    final currentHour = now.hour;
+
+    for (final slot in timeSlots) {
+      if (slot.hour24 >= currentHour) {
+        return slot.key;
+      }
+    }
+
+    // 기본값으로 첫 번째 슬롯
+    return timeSlots.first.key;
   }
 
 }

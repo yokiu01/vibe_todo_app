@@ -185,6 +185,33 @@ class PDSDiaryProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updatePDSPlan(PDSPlan plan) async {
+    try {
+      print('PDSDiaryProvider: updatePDSPlan 호출 - ${plan.id}');
+      
+      // 데이터베이스에서 업데이트
+      final updatedPlan = await _databaseService.updatePDSPlan(plan.id, plan.toMap());
+      
+      // 로컬 리스트에서 해당 계획 찾아서 업데이트
+      final index = _pdsPlans.indexWhere((p) => p.id == plan.id);
+      if (index != -1) {
+        _pdsPlans[index] = updatedPlan;
+        print('PDSDiaryProvider: 로컬 데이터 업데이트 완료');
+      } else {
+        print('PDSDiaryProvider: 해당 계획을 찾을 수 없음, 새로 추가');
+        _pdsPlans.add(updatedPlan);
+      }
+      
+      notifyListeners();
+      print('PDSDiaryProvider: updatePDSPlan 완료');
+    } catch (e) {
+      print('PDSDiaryProvider: updatePDSPlan 오류: $e');
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> saveFreeformPlan(DateTime date, String timeSlot, String content) async {
     try {
       print('PDSDiaryProvider: saveFreeformPlan 호출 - ${date.toIso8601String().split('T')[0]} $timeSlot: $content');

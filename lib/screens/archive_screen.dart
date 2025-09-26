@@ -799,6 +799,19 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
 
   /// 항목 상세 정보 표시
   void _showItemDetails(NotionTask item) {
+    // Area·Resource 데이터베이스의 페이지인 경우 관련 페이지들을 표시
+    if (item.status == '영역' || item.status == '자원') {
+      _showAreaResourceRelatedPages(item);
+      return;
+    }
+
+    // Goal 또는 Project 데이터베이스의 페이지인 경우 관련 할일과 노트를 표시
+    if (item.clarification == '목표' || item.clarification == '프로젝트') {
+      _showGoalProjectRelatedPages(item);
+      return;
+    }
+
+    // 일반적인 페이지 내용 표시
     showDialog(
       context: context,
       useSafeArea: true,
@@ -822,6 +835,70 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
               _loadArchivedItems(); // 새로고침
             },
             onClose: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Area·Resource 페이지의 관련 데이터베이스 페이지들 표시
+  void _showAreaResourceRelatedPages(NotionTask areaResourceTask) {
+    showDialog(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Dialog.fullscreen(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF5F1E8),
+                Color(0xFFDDD4C0),
+              ],
+            ),
+          ),
+          child: _AreaResourceRelatedPagesView(
+            areaResourceTask: areaResourceTask,
+            authService: _authService,
+            onUpdate: () {
+              Navigator.of(context).pop();
+              _loadArchivedItems(); // 새로고침
+            },
+            onClose: () => Navigator.of(context).pop(),
+            onTaskTap: _showItemDetails,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Goal/Project 페이지의 관련 할일과 노트들 표시
+  void _showGoalProjectRelatedPages(NotionTask goalProjectTask) {
+    showDialog(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Dialog.fullscreen(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF5F1E8),
+                Color(0xFFDDD4C0),
+              ],
+            ),
+          ),
+          child: _GoalProjectRelatedPagesView(
+            goalProjectTask: goalProjectTask,
+            authService: _authService,
+            onUpdate: () {
+              Navigator.of(context).pop();
+              _loadArchivedItems(); // 새로고침
+            },
+            onClose: () => Navigator.of(context).pop(),
+            onTaskTap: _showItemDetails,
           ),
         ),
       ),
@@ -1617,6 +1694,686 @@ class _ArchiveItemDetailViewState extends State<_ArchiveItemDetailView> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+/// Area·Resource 관련 페이지들 표시 위젯 (Archive용)
+class _AreaResourceRelatedPagesView extends StatefulWidget {
+  final NotionTask areaResourceTask;
+  final NotionAuthService authService;
+  final VoidCallback onUpdate;
+  final VoidCallback onClose;
+  final Function(NotionTask) onTaskTap;
+
+  const _AreaResourceRelatedPagesView({
+    required this.areaResourceTask,
+    required this.authService,
+    required this.onUpdate,
+    required this.onClose,
+    required this.onTaskTap,
+  });
+
+  @override
+  State<_AreaResourceRelatedPagesView> createState() => _AreaResourceRelatedPagesViewState();
+}
+
+class _AreaResourceRelatedPagesViewState extends State<_AreaResourceRelatedPagesView> {
+  bool _isLoading = true;
+  List<NotionTask> _relatedGoals = [];
+  List<NotionTask> _relatedProjects = [];
+  List<NotionTask> _relatedNotes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRelatedPages();
+  }
+
+  Future<void> _loadRelatedPages() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // 관련된 목표, 프로젝트, 노트들을 병렬로 가져오기
+      final results = await Future.wait([
+        widget.authService.apiService!.getRelatedGoals(widget.areaResourceTask.id),
+        widget.authService.apiService!.getRelatedProjects(widget.areaResourceTask.id),
+        widget.authService.apiService!.getRelatedNotesByRelation(widget.areaResourceTask.id),
+      ]);
+
+      final goals = results[0].map((data) => NotionTask.fromNotion(data)).toList();
+      final projects = results[1].map((data) => NotionTask.fromNotion(data)).toList();
+      final notes = results[2].map((data) => NotionTask.fromNotion(data)).toList();
+
+      setState(() {
+        _relatedGoals = goals;
+        _relatedProjects = projects;
+        _relatedNotes = notes;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('관련 페이지 로드 오류: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('관련 페이지 로드 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 헤더
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF8B7355),
+                    Color(0xFF6B5B47),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      widget.areaResourceTask.status == '영역' ? Icons.location_city : Icons.library_books,
+                      color: const Color(0xFFFDF6E3),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.areaResourceTask.title,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFDF6E3),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '관련된 목표, 프로젝트, 노트들',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFFFDF6E3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onClose,
+                    icon: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Color(0xFFFDF6E3),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 내용
+            Expanded(
+              child: _isLoading
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B7355)),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '관련 페이지를 로드하는 중...',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Container(
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDF6E3),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 관련 목표들
+                            _buildRelatedSection(
+                              title: '🎯 관련 목표',
+                              items: _relatedGoals,
+                              emptyMessage: '관련된 목표가 없습니다.',
+                            ),
+                            const SizedBox(height: 24),
+
+                            // 관련 프로젝트들
+                            _buildRelatedSection(
+                              title: '💼 관련 프로젝트',
+                              items: _relatedProjects,
+                              emptyMessage: '관련된 프로젝트가 없습니다.',
+                            ),
+                            const SizedBox(height: 24),
+
+                            // 관련 노트들
+                            _buildRelatedSection(
+                              title: '📝 관련 노트',
+                              items: _relatedNotes,
+                              emptyMessage: '관련된 노트가 없습니다.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRelatedSection({
+    required String title,
+    required List<NotionTask> items,
+    required String emptyMessage,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B7355).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${items.length}개',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF8B7355),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (items.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F1E8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFDDD4C0)),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 48,
+                  color: const Color(0xFFDDD4C0),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  emptyMessage,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF8B7355),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          )
+        else
+          ...items.map((item) => _buildRelatedItemCard(item)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildRelatedItemCard(NotionTask item) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F1E8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDD4C0)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        title: Text(
+          item.title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1E293B),
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: item.description?.isNotEmpty == true
+            ? Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  item.description!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )
+            : null,
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: const Color(0xFF8B7355),
+        ),
+        onTap: () => widget.onTaskTap(item),
+      ),
+    );
+  }
+}
+
+/// Goal/Project 관련 페이지들 표시 위젯 (Archive용)
+class _GoalProjectRelatedPagesView extends StatefulWidget {
+  final NotionTask goalProjectTask;
+  final NotionAuthService authService;
+  final VoidCallback onUpdate;
+  final VoidCallback onClose;
+  final Function(NotionTask) onTaskTap;
+
+  const _GoalProjectRelatedPagesView({
+    required this.goalProjectTask,
+    required this.authService,
+    required this.onUpdate,
+    required this.onClose,
+    required this.onTaskTap,
+  });
+
+  @override
+  State<_GoalProjectRelatedPagesView> createState() => _GoalProjectRelatedPagesViewState();
+}
+
+class _GoalProjectRelatedPagesViewState extends State<_GoalProjectRelatedPagesView> {
+  bool _isLoading = true;
+  List<NotionTask> _relatedTodos = [];
+  List<NotionTask> _relatedNotes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRelatedPages();
+  }
+
+  Future<void> _loadRelatedPages() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // 관련된 할일과 노트들을 병렬로 가져오기
+      final results = await Future.wait([
+        widget.authService.apiService!.getRelatedTodos(widget.goalProjectTask.id),
+        widget.authService.apiService!.getRelatedNotesForGoalProject(widget.goalProjectTask.id),
+      ]);
+
+      final todos = results[0].map((data) => NotionTask.fromNotion(data)).toList();
+      final notes = results[1].map((data) => NotionTask.fromNotion(data)).toList();
+
+      setState(() {
+        _relatedTodos = todos;
+        _relatedNotes = notes;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('관련 페이지 로드 오류: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('관련 페이지 로드 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isGoal = widget.goalProjectTask.clarification == '목표';
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 헤더
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF8B7355),
+                    Color(0xFF6B5B47),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      isGoal ? Icons.flag : Icons.work,
+                      color: const Color(0xFFFDF6E3),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.goalProjectTask.title,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFDF6E3),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '관련된 할일과 노트들',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFFFDF6E3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onClose,
+                    icon: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Color(0xFFFDF6E3),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 내용
+            Expanded(
+              child: _isLoading
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B7355)),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '관련 페이지를 로드하는 중...',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Container(
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDF6E3),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 관련 할일들
+                            _buildRelatedSection(
+                              title: '✅ 관련 할일',
+                              items: _relatedTodos,
+                              emptyMessage: '관련된 할일이 없습니다.',
+                            ),
+                            const SizedBox(height: 24),
+
+                            // 관련 노트들
+                            _buildRelatedSection(
+                              title: '📝 관련 노트',
+                              items: _relatedNotes,
+                              emptyMessage: '관련된 노트가 없습니다.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRelatedSection({
+    required String title,
+    required List<NotionTask> items,
+    required String emptyMessage,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B7355).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${items.length}개',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF8B7355),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (items.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F1E8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFDDD4C0)),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 48,
+                  color: const Color(0xFFDDD4C0),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  emptyMessage,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF8B7355),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          )
+        else
+          ...items.map((item) => _buildRelatedItemCard(item)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildRelatedItemCard(NotionTask item) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F1E8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDD4C0)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        title: Text(
+          item.title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1E293B),
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: item.description?.isNotEmpty == true
+            ? Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  item.description!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )
+            : null,
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: const Color(0xFF8B7355),
+        ),
+        onTap: () => widget.onTaskTap(item),
+      ),
     );
   }
 }

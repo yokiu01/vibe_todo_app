@@ -719,6 +719,135 @@ class NotionApiService {
     }
   }
 
+  /// 특정 영역·자원과 관련된 목표 조회
+  Future<List<Map<String, dynamic>>> getRelatedGoals(String areaResourceId) async {
+    try {
+      final filter = {
+        'property': '영역 · 자원 데이터베이스',
+        'relation': {
+          'contains': areaResourceId,
+        }
+      };
+
+      return await queryDatabase(GOAL_DB_ID, filter);
+    } catch (e) {
+      print('관련 목표 조회 오류: $e');
+      return [];
+    }
+  }
+
+  /// 특정 영역·자원과 관련된 프로젝트 조회
+  Future<List<Map<String, dynamic>>> getRelatedProjects(String areaResourceId) async {
+    try {
+      final filter = {
+        'property': '영역 · 자원 데이터베이스',
+        'relation': {
+          'contains': areaResourceId,
+        }
+      };
+
+      return await queryDatabase(PROJECT_DB_ID, filter);
+    } catch (e) {
+      print('관련 프로젝트 조회 오류: $e');
+      return [];
+    }
+  }
+
+  /// 특정 영역·자원과 관련된 노트 조회 (관계형 필터)
+  Future<List<Map<String, dynamic>>> getRelatedNotesByRelation(String areaResourceId) async {
+    try {
+      final filter = {
+        'property': '영역 · 자원 데이터베이스',
+        'relation': {
+          'contains': areaResourceId,
+        }
+      };
+
+      return await queryDatabase(MEMO_DB_ID, filter);
+    } catch (e) {
+      print('관련 노트 조회 오류: $e');
+      return [];
+    }
+  }
+
+  /// 특정 목표/프로젝트와 관련된 할일 조회
+  Future<List<Map<String, dynamic>>> getRelatedTodos(String goalOrProjectId) async {
+    try {
+      // 목표 관련 할일 조회
+      final goalFilter = {
+        'property': '목표 데이터베이스',
+        'relation': {
+          'contains': goalOrProjectId,
+        }
+      };
+
+      final goalTodos = await queryDatabase(TODO_DB_ID, goalFilter);
+
+      // 프로젝트 관련 할일 조회
+      final projectFilter = {
+        'property': '프로젝트 데이터베이스',
+        'relation': {
+          'contains': goalOrProjectId,
+        }
+      };
+
+      final projectTodos = await queryDatabase(TODO_DB_ID, projectFilter);
+
+      // 중복 제거하여 반환
+      final allTodos = [...goalTodos, ...projectTodos];
+      final uniqueTodos = <String, Map<String, dynamic>>{};
+
+      for (final todo in allTodos) {
+        final id = todo['id'] as String;
+        uniqueTodos[id] = todo;
+      }
+
+      return uniqueTodos.values.toList();
+    } catch (e) {
+      print('관련 할일 조회 오류: $e');
+      return [];
+    }
+  }
+
+  /// 특정 목표/프로젝트와 관련된 노트 조회
+  Future<List<Map<String, dynamic>>> getRelatedNotesForGoalProject(String goalOrProjectId) async {
+    try {
+      // 목표와 관련된 노트 조회
+      final goalFilter = {
+        'property': '목표 데이터베이스',
+        'relation': {
+          'contains': goalOrProjectId,
+        }
+      };
+
+      final goalNotes = await queryDatabase(MEMO_DB_ID, goalFilter);
+
+      // 프로젝트와 관련된 노트 조회
+      final projectFilter = {
+        'property': '프로젝트 데이터베이스',
+        'relation': {
+          'contains': goalOrProjectId,
+        }
+      };
+
+      final projectNotes = await queryDatabase(MEMO_DB_ID, projectFilter);
+
+      // 중복 제거하여 반환
+      final allNotes = [...goalNotes, ...projectNotes];
+      final uniqueNotes = <String, Map<String, dynamic>>{};
+
+      for (final note in allNotes) {
+        final id = note['id'] as String;
+        uniqueNotes[id] = note;
+      }
+
+      return uniqueNotes.values.toList();
+    } catch (e) {
+      print('관련 노트 조회 오류: $e');
+      return [];
+    }
+  }
+
   /// 위치 기반 할일 조회 (위치 기반 알림용)
   Future<List<Map<String, dynamic>>> getTasksForLocation(String locationName) async {
     try {
