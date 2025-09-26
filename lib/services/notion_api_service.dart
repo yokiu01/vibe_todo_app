@@ -880,4 +880,22 @@ class NotionApiService {
       rethrow;
     }
   }
+
+  /// 할일의 날짜/시간 업데이트
+  Future<void> updateTaskDateTime(String taskId, DateTime dateTime) async {
+    try {
+      final properties = <String, dynamic>{
+        '날짜': <String, dynamic>{
+          'date': <String, dynamic>{
+            'start': dateTime.toIso8601String(),
+          }
+        }
+      };
+      
+      await updatePage(taskId, properties);
+    } catch (e) {
+      print('할일 날짜/시간 업데이트 오류: $e');
+      rethrow;
+    }
+  }
 }

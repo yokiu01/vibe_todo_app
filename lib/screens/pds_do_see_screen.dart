@@ -194,24 +194,16 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F1E8),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshData,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              children: [
-                _buildHeader(),
-                Container(
-                  constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height > 300
-                ? MediaQuery.of(context).size.height - 200
-                : 100,
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refreshData,
+                child: _buildDoSeeLayout(),
+              ),
             ),
-                  child: _buildDoSeeLayout(),
-                ),
-              ],
-            ),
-          ),
+          ],
         ),
       ),
     );
@@ -221,50 +213,50 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
-        color: Colors.white,
         border: Border(
           bottom: BorderSide(color: Color(0xFFE2E8F0)),
         ),
       ),
       child: Column(
         children: [
-          const Text(
-            '✅ DO-SEE',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF3C2A21),
-            ),
+          Row(
+            children: [
+              const Icon(
+                Icons.visibility,
+                color: Color(0xFF10B981),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'DO-SEE',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           GestureDetector(
             onTap: _showDatePicker,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF374151),
-                      fontWeight: FontWeight.w600,
-                    ),
+            child: Row(
+              children: [
+                Text(
+                  DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.calendar_today,
-                    size: 18,
-                    color: Color(0xFF8B7355),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.calendar_today,
+                  size: 14,
+                  color: Color(0xFF6B7280),
+                ),
+              ],
             ),
           ),
         ],
@@ -280,103 +272,82 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         final plannedActivities = currentPlan?.freeformPlans ?? {};
         final dailyTasks = _getDailyTasks(itemProvider.items);
 
-        // Consumer 내에서는 상태 변경 없이 단순히 데이터만 표시
-        // 실제 데이터 동기화는 _loadCurrentPlan에서 처리
-
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              // DO 레이아웃
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        return Column(
+          children: [
+            // 헤더 섹션
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
                 children: [
-                  // 좌측: PLAN에서 작성한 내용과 할일
-                  Expanded(
-                    flex: 2,
-                    child: _buildLeftColumn(timeSlots, plannedActivities, dailyTasks),
+                  const Expanded(
+                    child: Text(
+                      'Plan',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                  // 중앙: 시간표
-                  _buildCenterColumn(timeSlots),
-                  // 우측: 실제로 한 일 (DO)
-                  Expanded(
-                    flex: 2,
-                    child: _buildRightColumn(timeSlots),
+                  const Expanded(
+                    child: Text(
+                      'Do',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               ),
-              // 하단: SEE (회고 메모)
-              _buildSeeSection(),
-            ],
-          ),
+            ),
+            // 메인 스크롤 영역 (Plan과 Do가 함께 스크롤)
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    // Plan과 Do가 나란히 배치된 시간 슬롯들
+                    ...timeSlots.map((slot) => _buildTimeSlotRow(slot, plannedActivities, dailyTasks)),
+                    const SizedBox(height: 24),
+                    // 하단: SEE (회고 메모)
+                    _buildSeeSection(),
+                  ],
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildLeftColumn(List<TimeSlot> timeSlots, Map<String, String> plannedActivities, List<Item> dailyTasks) {
+  Widget _buildTimeSlotRow(TimeSlot slot, Map<String, String> plannedActivities, List<Item> dailyTasks) {
     return Container(
-      padding: const EdgeInsets.all(8),
-      child: Column(
+      margin: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildColumnHeader('PLAN'),
-          ...timeSlots.map((slot) => _buildPlannedDisplay(slot, plannedActivities, dailyTasks)),
+          // 좌측: Plan (시간 포함)
+          Expanded(
+            child: _buildPlanCard(slot, plannedActivities, dailyTasks),
+          ),
+          const SizedBox(width: 8),
+          // 우측: Do (시간 없음)
+          Expanded(
+            child: _buildDoCard(slot),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCenterColumn(List<TimeSlot> timeSlots) {
-    return Container(
-      width: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        children: [
-          _buildColumnHeader('시간'),
-          ...timeSlots.map((slot) => _buildTimeDisplay(slot)),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildRightColumn(List<TimeSlot> timeSlots) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          _buildColumnHeader('DO (실제 한 일)'),
-          ...timeSlots.map((slot) => _buildActualInput(slot)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColumnHeader(String title) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      margin: const EdgeInsets.only(bottom: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF374151),
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-
-  Widget _buildPlannedDisplay(TimeSlot slot, Map<String, String> plannedActivities, List<Item> dailyTasks) {
+  Widget _buildPlanCard(TimeSlot slot, Map<String, String> plannedActivities, List<Item> dailyTasks) {
     final plannedText = plannedActivities[slot.key] ?? '';
-
-    // 디버그 로그 추가
-    if (plannedText.isNotEmpty) {
-      print('PDS DO-SEE: ${slot.key} 시간대에 계획된 활동: $plannedText');
-    }
 
     // 해당 시간대의 할일 찾기
     final slotTasks = dailyTasks.where((task) {
@@ -385,211 +356,323 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
       return taskHour == slot.hour24;
     }).toList();
 
+    final hasContent = plannedText.isNotEmpty || slotTasks.isNotEmpty;
+
     return Container(
-      height: 60,
-      margin: const EdgeInsets.only(bottom: 2),
-      padding: const EdgeInsets.all(8),
+      height: 80,
       decoration: BoxDecoration(
-        color: plannedText.isNotEmpty || slotTasks.isNotEmpty
-            ? const Color(0xFFF0F9FF)
-            : const Color(0xFFF5F1E8),
+        color: hasContent ? const Color(0xFFFEF3C7) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: plannedText.isNotEmpty || slotTasks.isNotEmpty
-              ? const Color(0xFF3B82F6).withOpacity(0.3)
-              : const Color(0xFFE2E8F0),
+          color: hasContent ? const Color(0xFFF59E0B) : const Color(0xFFE2E8F0),
+          width: hasContent ? 2 : 1,
         ),
-        borderRadius: BorderRadius.circular(4),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (plannedText.isNotEmpty)
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 시간 표시 (왼쪽 상단)
+            Text(
+              slot.display,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: hasContent ? const Color(0xFFF59E0B) : const Color(0xFF1F2937),
+              ),
+            ),
+            const SizedBox(height: 4),
+            // 계획 내용 영역
             Expanded(
-              child: Text(
-                plannedText,
+              child: plannedText.isNotEmpty
+                  ? Text(
+                      plannedText,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1F2937),
+                        height: 1.4,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    )
+                  : slotTasks.isNotEmpty
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: slotTasks.take(2).map((task) => Container(
+                            margin: const EdgeInsets.only(bottom: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: task.status == ItemStatus.completed ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              task.title,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )).toList(),
+                        )
+                      : const Text(
+                          '계획 없음',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF9CA3AF),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDoCard(TimeSlot slot) {
+    final hasContent = _activityControllers[slot.key]?.text.isNotEmpty ?? false;
+    final hasPlannedActivity = _hasPlannedActivity(slot);
+
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: hasContent ? const Color(0xFFF0FDF4) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: hasContent ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+          width: hasContent ? 2 : 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 상단 액션 버튼들
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (hasPlannedActivity)
+                  GestureDetector(
+                    onTap: () => _copyPlanToActivity(slot),
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Icon(
+                        Icons.copy,
+                        size: 12,
+                        color: Color(0xFF3B82F6),
+                      ),
+                    ),
+                  ),
+                if (hasContent) ...[
+                  if (hasPlannedActivity) const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      size: 12,
+                      color: Color(0xFF10B981),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            // 실제 활동 입력 영역
+            Expanded(
+              child: TextField(
+                controller: _activityControllers[slot.key],
+                decoration: InputDecoration(
+                  hintText: hasContent ? null : '실제로 한 일...',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  hintStyle: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF9CA3AF),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
                 style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF1E40AF),
-                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  color: Color(0xFF1F2937),
+                  height: 1.4,
                 ),
                 maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+                onChanged: (value) {
+                  setState(() {
+                    _actualActivities[slot.key] = value;
+                  });
+                  _activityDebounceTimer?.cancel();
+                  _activityDebounceTimer = Timer(const Duration(seconds: 1), () {
+                    _saveActualActivity(slot.key, value);
+                  });
+                },
+                onSubmitted: (value) {
+                  _activityDebounceTimer?.cancel();
+                  _saveActualActivity(slot.key, value);
+                },
               ),
             ),
-          if (slotTasks.isNotEmpty) ...[
-            if (plannedText.isNotEmpty) const SizedBox(height: 2),
-            ...slotTasks.take(2).map((task) => Container(
-              margin: const EdgeInsets.only(bottom: 1),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: task.status == ItemStatus.completed ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                task.title,
-                style: const TextStyle(
-                  fontSize: 8,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            )),
           ],
-          if (plannedText.isEmpty && slotTasks.isEmpty)
-            const Center(
-              child: Text(
-                '-',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFFE5E7EB),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeDisplay(TimeSlot slot) {
-    return Container(
-      height: 60,
-      margin: const EdgeInsets.only(bottom: 2),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F1E8),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Center(
-        child: Text(
-          slot.display,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF8B7355),
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildActualInput(TimeSlot slot) {
-    return Container(
-      height: 60,
-      margin: const EdgeInsets.only(bottom: 2),
-      child: TextField(
-        controller: _activityControllers[slot.key],
-        decoration: InputDecoration(
-          hintText: '실제로 한 일',
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF8B7355)),
-          ),
-          contentPadding: const EdgeInsets.all(8),
-          hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
-          filled: true,
-          fillColor: Colors.white,
-          suffixIcon: _hasPlannedActivity(slot)
-            ? IconButton(
-                icon: const Icon(Icons.copy, size: 16, color: Color(0xFF3B82F6)),
-                onPressed: () => _copyPlanToActivity(slot),
-                tooltip: 'Plan에서 복사하기',
-              )
-            : null,
-        ),
-        style: const TextStyle(fontSize: 12),
-        maxLines: 2,
-        onChanged: (value) {
-          setState(() {
-            _actualActivities[slot.key] = value;
-          });
-          // 디바운싱으로 실시간 저장
-          _activityDebounceTimer?.cancel();
-          _activityDebounceTimer = Timer(const Duration(seconds: 1), () {
-            _saveActualActivity(slot.key, value);
-          });
-        },
-        onSubmitted: (value) {
-          _activityDebounceTimer?.cancel();
-          _saveActualActivity(slot.key, value);
-        },
-        onEditingComplete: () {
-          _activityDebounceTimer?.cancel();
-          final value = _activityControllers[slot.key]?.text ?? '';
-          _saveActualActivity(slot.key, value);
-        },
-      ),
-    );
+  bool _isCurrentTimeSlot(TimeSlot slot) {
+    final now = DateTime.now();
+    return now.hour == slot.hour24;
   }
 
   Widget _buildSeeSection() {
+    final hasContent = _seeNotesController.text.isNotEmpty;
+
     return Container(
-      margin: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text(
-                '📝 SEE (오늘의 회고)',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF374151),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                DateFormat('HH:mm').format(DateTime.now()),
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF8B7355),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _seeNotesController,
-            decoration: InputDecoration(
-              hintText: '오늘 하루를 돌아보며 느낀 점, 배운 점, 개선할 점 등을 자유롭게 적어보세요...',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF8B7355)),
-              ),
-              contentPadding: const EdgeInsets.all(16),
-              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-              filled: true,
-              fillColor: Colors.white,
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            style: const TextStyle(fontSize: 14),
-            maxLines: 6,
-            onChanged: (value) {
-              setState(() {
-                _seeNotes = value;
-              });
-              // 디바운싱으로 실시간 저장
-              _seeNotesDebounceTimer?.cancel();
-              _seeNotesDebounceTimer = Timer(const Duration(seconds: 2), () {
-                _saveSeeNotes(value);
-              });
-            },
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3E8FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.psychology_outlined,
+                    color: Color(0xFF8B5CF6),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'SEE (오늘의 회고)',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  DateFormat('HH:mm').format(DateTime.now()),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: hasContent ? const Color(0xFF8B5CF6) : const Color(0xFFE2E8F0),
+                width: hasContent ? 2 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '오늘 하루를 되돌아보세요',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _seeNotesController,
+                  decoration: const InputDecoration(
+                    hintText: '• 오늘 잘한 점은 무엇인가요?\n• 어떤 어려움이 있었나요?\n• 내일은 어떻게 개선할 수 있을까요?\n• 새롭게 배운 점이 있나요?',
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF9CA3AF),
+                      height: 1.6,
+                    ),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1F2937),
+                    height: 1.6,
+                  ),
+                  maxLines: null,
+                  minLines: 6,
+                  onChanged: (value) {
+                    setState(() {
+                      _seeNotes = value;
+                    });
+                    _seeNotesDebounceTimer?.cancel();
+                    _seeNotesDebounceTimer = Timer(const Duration(seconds: 2), () {
+                      _saveSeeNotes(value);
+                    });
+                  },
+                ),
+                if (hasContent) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          size: 16,
+                          color: Color(0xFF8B5CF6),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '회고가 저장되었습니다',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8B5CF6),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       ),
