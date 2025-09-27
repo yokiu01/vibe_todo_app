@@ -86,24 +86,38 @@ class PDSPlan {
   }
 
   static String _mapToJson(Map<String, String> map) {
-    return map.entries.map((e) => '${e.key}=${e.value}').join('&');
+    return map.entries.map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}').join('&');
   }
 
   static Map<String, String> _jsonToMap(String json) {
     if (json.isEmpty) return {};
     final Map<String, String> result = {};
 
-    // 기존 형식(콜론과 파이프) 지원을 위한 migration
-    if (json.contains('|') && json.contains(':')) {
-      final entries = json.split('|');
-      for (final entry in entries) {
-        final parts = entry.split(':');
-        if (parts.length >= 2) {
-          result[parts[0]] = parts.sublist(1).join(':');
+    try {
+      // 기존 형식(콜론과 파이프) 지원을 위한 migration
+      if (json.contains('|') && json.contains(':')) {
+        final entries = json.split('|');
+        for (final entry in entries) {
+          final parts = entry.split(':');
+          if (parts.length >= 2) {
+            result[parts[0]] = parts.sublist(1).join(':');
+          }
+        }
+      } else {
+        // 새로운 형식(등호와 앰퍼샌드) with URL decoding
+        final entries = json.split('&');
+        for (final entry in entries) {
+          final parts = entry.split('=');
+          if (parts.length >= 2) {
+            final key = Uri.decodeComponent(parts[0]);
+            final value = Uri.decodeComponent(parts.sublist(1).join('='));
+            result[key] = value;
+          }
         }
       }
-    } else {
-      // 새로운 형식(등호와 앰퍼샌드)
+    } catch (e) {
+      print('Error parsing JSON to map: $e');
+      // Fallback to basic parsing
       final entries = json.split('&');
       for (final entry in entries) {
         final parts = entry.split('=');

@@ -12,6 +12,7 @@ class NotionApiService {
   static const String PROJECT_DB_ID = '1159f5e4a81180019f29cdd24d369230';
   static const String GOAL_DB_ID = '1159f5e4a81180d092add53ae9df7f05';
   static const String AREA_RESOURCE_DB_ID = '1159f5e4a81180d1ab17fa79bb0cf0f4'; // 영역·자원 데이터베이스
+  static const String PDS_DB_ID = '27b9f5e4a811805c89cff86146f4d12f'; // PDS 데이터베이스
   
   static const String _apiKeyKey = 'notion_api_key';
   
@@ -558,6 +559,7 @@ class NotionApiService {
       GOAL_DB_ID,      // 목표
       MEMO_DB_ID,      // 노트 (영역.자원)
       AREA_RESOURCE_DB_ID, // 영역 · 자원 데이터베이스
+      PDS_DB_ID,       // PDS 데이터베이스
     ];
     return allowedDatabases.contains(databaseId);
   }
@@ -891,10 +893,305 @@ class NotionApiService {
           }
         }
       };
-      
+
       await updatePage(taskId, properties);
     } catch (e) {
       print('할일 날짜/시간 업데이트 오류: $e');
+      rethrow;
+    }
+  }
+
+  // ==================== PDS 관련 메서드 ====================
+
+  /// 헤딩 블록 생성 헬퍼 메서드
+  Map<String, dynamic> createHeadingBlock(String text, {int level = 2}) {
+    final headingType = 'heading_$level';
+    return <String, dynamic>{
+      'object': 'block',
+      'type': headingType,
+      headingType: <String, dynamic>{
+        'rich_text': [
+          <String, dynamic>{
+            'type': 'text',
+            'text': <String, dynamic>{
+              'content': text,
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  /// 토글 블록 생성 헬퍼 메서드
+  Map<String, dynamic> createToggleBlock(String text, {List<Map<String, dynamic>>? children}) {
+    return <String, dynamic>{
+      'object': 'block',
+      'type': 'toggle',
+      'toggle': <String, dynamic>{
+        'rich_text': [
+          <String, dynamic>{
+            'type': 'text',
+            'text': <String, dynamic>{
+              'content': text,
+            },
+          },
+        ],
+        if (children != null && children.isNotEmpty) 'children': children,
+      },
+    };
+  }
+
+  /// 특정 날짜의 PDS 페이지 조회
+  Future<Map<String, dynamic>?> getPDSPageByDate(DateTime date) async {
+    try {
+      final dateStr = '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+
+      final filter = <String, dynamic>{
+        'property': '이름',
+        'title': <String, dynamic>{
+          'equals': dateStr,
+        }
+      };
+
+      final results = await queryDatabase(PDS_DB_ID, filter);
+      return results.isNotEmpty ? results.first : null;
+    } catch (e) {
+      print('PDS 페이지 조회 오류: $e');
+      return null;
+    }
+  }
+
+  /// PDS 페이지 생성
+  Future<Map<String, dynamic>> createPDSPage(DateTime date) async {
+    try {
+      final dateStr = '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+
+      final properties = <String, dynamic>{
+        '이름': <String, dynamic>{
+          'title': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'text': <String, dynamic>{
+                'content': dateStr,
+              }
+            }
+          ]
+        },
+      };
+
+      final page = await createPage(PDS_DB_ID, properties);
+      final pageId = page['id'] as String;
+
+      // 초기 블록 구조 생성
+      await _createInitialPDSBlocks(pageId);
+
+      return page;
+    } catch (e) {
+      print('PDS 페이지 생성 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// PDS 페이지 초기 블록 구조 생성
+  Future<void> _createInitialPDSBlocks(String pageId) async {
+    final blocks = <Map<String, dynamic>>[
+      createHeadingBlock('Plan ✍️'),
+      createHeadingBlock('Do 🏃'),
+      createHeadingBlock('See 👀'),
+    ];
+
+    await appendBlockChildren(pageId, blocks);
+  }
+
+  /// PDS 페이지에 계획 내용 추가
+  Future<void> addPlanContent(String pageId, String timeSlot, String content) async {
+    try {
+      final blocks = await getBlockChildren(pageId);
+      String? planHeadingId;
+
+      // Plan 헤딩 찾기
+      for (final block in blocks) {
+        if (block['type'] == 'heading_2') {
+          final richText = block['heading_2']?['rich_text'] as List<dynamic>? ?? [];
+          if (richText.isNotEmpty) {
+            final text = richText.first['text']?['content'] as String? ?? '';
+            if (text.startsWith('Plan')) {
+              planHeadingId = block['id'] as String;
+              break;
+            }
+          }
+        }
+      }
+
+      if (planHeadingId == null) {
+        throw Exception('Plan 헤딩을 찾을 수 없습니다.');
+      }
+
+      // Plan 헤딩 아래의 기존 블록들 조회
+      final planChildren = await getBlockChildren(planHeadingId);
+
+      // 해당 시간 슬롯의 토글 블록 찾기 또는 생성
+      String? timeToggleId;
+      for (final child in planChildren) {
+        if (child['type'] == 'toggle') {
+          final richText = child['toggle']?['rich_text'] as List<dynamic>? ?? [];
+          if (richText.isNotEmpty) {
+            final text = richText.first['text']?['content'] as String? ?? '';
+            if (text == timeSlot) {
+              timeToggleId = child['id'] as String;
+              break;
+            }
+          }
+        }
+      }
+
+      if (timeToggleId == null) {
+        // 새 시간 토글 블록 생성
+        final timeToggleBlock = createToggleBlock(timeSlot, children: [createParagraphBlock(content)]);
+        await appendBlockChildren(planHeadingId, [timeToggleBlock]);
+      } else {
+        // 기존 토글에 내용 추가
+        await appendBlockChildren(timeToggleId, [createParagraphBlock(content)]);
+      }
+    } catch (e) {
+      print('계획 내용 추가 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// PDS 페이지에 실제 활동 내용 추가
+  Future<void> addDoContent(String pageId, String timeSlot, String content) async {
+    try {
+      final blocks = await getBlockChildren(pageId);
+      String? doHeadingId;
+
+      // Do 헤딩 찾기
+      for (final block in blocks) {
+        if (block['type'] == 'heading_2') {
+          final richText = block['heading_2']?['rich_text'] as List<dynamic>? ?? [];
+          if (richText.isNotEmpty) {
+            final text = richText.first['text']?['content'] as String? ?? '';
+            if (text.startsWith('Do')) {
+              doHeadingId = block['id'] as String;
+              break;
+            }
+          }
+        }
+      }
+
+      if (doHeadingId == null) {
+        throw Exception('Do 헤딩을 찾을 수 없습니다.');
+      }
+
+      // Do 헤딩 아래의 기존 블록들 조회
+      final doChildren = await getBlockChildren(doHeadingId);
+
+      // 해당 시간 슬롯의 토글 블록 찾기 또는 생성
+      String? timeToggleId;
+      for (final child in doChildren) {
+        if (child['type'] == 'toggle') {
+          final richText = child['toggle']?['rich_text'] as List<dynamic>? ?? [];
+          if (richText.isNotEmpty) {
+            final text = richText.first['text']?['content'] as String? ?? '';
+            if (text == timeSlot) {
+              timeToggleId = child['id'] as String;
+              break;
+            }
+          }
+        }
+      }
+
+      if (timeToggleId == null) {
+        // 새 시간 토글 블록 생성
+        final timeToggleBlock = createToggleBlock(timeSlot, children: [createParagraphBlock(content)]);
+        await appendBlockChildren(doHeadingId, [timeToggleBlock]);
+      } else {
+        // 기존 토글에 내용 추가
+        await appendBlockChildren(timeToggleId, [createParagraphBlock(content)]);
+      }
+    } catch (e) {
+      print('실제 활동 내용 추가 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// PDS 페이지에 회고 내용 추가
+  Future<void> addSeeContent(String pageId, String content) async {
+    try {
+      final blocks = await getBlockChildren(pageId);
+      String? seeHeadingId;
+
+      // See 헤딩 찾기
+      for (final block in blocks) {
+        if (block['type'] == 'heading_2') {
+          final richText = block['heading_2']?['rich_text'] as List<dynamic>? ?? [];
+          if (richText.isNotEmpty) {
+            final text = richText.first['text']?['content'] as String? ?? '';
+            if (text.startsWith('See')) {
+              seeHeadingId = block['id'] as String;
+              break;
+            }
+          }
+        }
+      }
+
+      if (seeHeadingId == null) {
+        throw Exception('See 헤딩을 찾을 수 없습니다.');
+      }
+
+      // See 헤딩 아래에 내용 추가
+      await appendBlockChildren(seeHeadingId, [createParagraphBlock(content)]);
+    } catch (e) {
+      print('회고 내용 추가 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// PDS 전체 동기화 (날짜별로 한 번에 처리)
+  Future<void> syncPDSData(DateTime date, Map<String, String>? plans, Map<String, String>? activities, String? seeNotes) async {
+    try {
+      print('PDS 동기화 시작: ${date.toIso8601String().split('T')[0]}');
+
+      // 기존 페이지 찾기 또는 새로 생성
+      var pdsPage = await getPDSPageByDate(date);
+      if (pdsPage == null) {
+        print('새 PDS 페이지 생성');
+        pdsPage = await createPDSPage(date);
+      }
+
+      final pageId = pdsPage['id'] as String;
+      print('PDS 페이지 ID: $pageId');
+
+      // 계획 동기화
+      if (plans != null && plans.isNotEmpty) {
+        print('계획 동기화: ${plans.length}개 항목');
+        for (final entry in plans.entries) {
+          if (entry.value.trim().isNotEmpty) {
+            final timeSlot = entry.key.substring(0, 2); // "03:00" -> "03"
+            await addPlanContent(pageId, timeSlot, entry.value);
+          }
+        }
+      }
+
+      // 실제 활동 동기화
+      if (activities != null && activities.isNotEmpty) {
+        print('실제 활동 동기화: ${activities.length}개 항목');
+        for (final entry in activities.entries) {
+          if (entry.value.trim().isNotEmpty) {
+            final timeSlot = entry.key.substring(0, 2); // "03:00" -> "03"
+            await addDoContent(pageId, timeSlot, entry.value);
+          }
+        }
+      }
+
+      // 회고 동기화
+      if (seeNotes != null && seeNotes.trim().isNotEmpty) {
+        print('회고 동기화');
+        await addSeeContent(pageId, seeNotes);
+      }
+
+      print('PDS 동기화 완료');
+    } catch (e) {
+      print('PDS 동기화 오류: $e');
       rethrow;
     }
   }

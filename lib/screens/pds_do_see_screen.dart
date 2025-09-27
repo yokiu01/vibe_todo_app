@@ -6,6 +6,7 @@ import '../providers/pds_diary_provider.dart';
 import '../providers/item_provider.dart';
 import '../models/pds_plan.dart';
 import '../models/item.dart';
+import '../services/notion_auth_service.dart';
 
 class PDSDoSeeScreen extends StatefulWidget {
   const PDSDoSeeScreen({super.key});
@@ -22,6 +23,7 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
   TextEditingController _seeNotesController = TextEditingController();
   Timer? _activityDebounceTimer;
   Timer? _seeNotesDebounceTimer;
+  final NotionAuthService _authService = NotionAuthService();
 
   @override
   void initState() {
@@ -233,6 +235,37 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1F2937),
+                ),
+              ),
+              const Spacer(),
+              // Notion 동기화 버튼
+              GestureDetector(
+                onTap: _syncToNotion,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.sync,
+                        size: 14,
+                        color: const Color(0xFF10B981),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Notion',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: const Color(0xFF10B981),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -514,12 +547,17 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
                     _actualActivities[slot.key] = value;
                   });
                   _activityDebounceTimer?.cancel();
-                  _activityDebounceTimer = Timer(const Duration(seconds: 1), () {
+                  _activityDebounceTimer = Timer(const Duration(milliseconds: 1200), () {
                     _saveActualActivity(slot.key, value);
                   });
                 },
                 onSubmitted: (value) {
                   _activityDebounceTimer?.cancel();
+                  _saveActualActivity(slot.key, value);
+                },
+                onEditingComplete: () {
+                  _activityDebounceTimer?.cancel();
+                  final value = _activityControllers[slot.key]?.text ?? '';
                   _saveActualActivity(slot.key, value);
                 },
               ),
@@ -638,9 +676,13 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
                       _seeNotes = value;
                     });
                     _seeNotesDebounceTimer?.cancel();
-                    _seeNotesDebounceTimer = Timer(const Duration(seconds: 2), () {
+                    _seeNotesDebounceTimer = Timer(const Duration(milliseconds: 1500), () {
                       _saveSeeNotes(value);
                     });
+                  },
+                  onEditingComplete: () {
+                    _seeNotesDebounceTimer?.cancel();
+                    _saveSeeNotes(_seeNotesController.text);
                   },
                 ),
                 if (hasContent) ...[
@@ -769,6 +811,92 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
           duration: Duration(seconds: 1),
         ),
       );
+    }
+  }
+
+  /// Notion에 수동 동기화
+  Future<void> _syncToNotion() async {
+    try {
+      if (!await _authService.isAuthenticated()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Notion API 키가 설정되지 않았습니다'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 로딩 상태 표시
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text('Notion에 동기화 중...'),
+              ],
+            ),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+
+      final pdsProvider = context.read<PDSDiaryProvider>();
+      final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
+
+      if (currentPlan != null) {
+        final apiService = _authService.apiService;
+        if (apiService != null) {
+          await apiService.syncPDSData(
+            _selectedDate,
+            currentPlan.freeformPlans,
+            currentPlan.actualActivities,
+            currentPlan.seeNotes,
+          );
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Notion 동기화 완료!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('동기화할 데이터가 없습니다'),
+              backgroundColor: Colors.grey,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('수동 Notion 동기화 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('동기화 실패: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 }

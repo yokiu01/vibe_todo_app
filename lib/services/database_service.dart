@@ -401,21 +401,40 @@ class DatabaseService {
 
   Future<PDSPlan> createPDSPlan(PDSPlan plan) async {
     final db = await database;
-    await db.insert('pds_plans', plan.toMap());
-    return plan;
+    try {
+      await db.insert('pds_plans', plan.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      return plan;
+    } catch (e) {
+      print('Error creating PDS plan: $e');
+      rethrow;
+    }
   }
 
   Future<PDSPlan> updatePDSPlan(String id, Map<String, dynamic> updates) async {
     final db = await database;
-    updates['updated_at'] = DateTime.now().toIso8601String();
-    await db.update('pds_plans', updates, where: 'id = ?', whereArgs: [id]);
-    
-    final List<Map<String, dynamic>> maps = await db.query(
-      'pds_plans',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    return PDSPlan.fromMap(maps.first);
+    try {
+      updates['updated_at'] = DateTime.now().toIso8601String();
+      final rowsAffected = await db.update('pds_plans', updates, where: 'id = ?', whereArgs: [id]);
+
+      if (rowsAffected == 0) {
+        throw Exception('No PDS plan found with id: $id');
+      }
+
+      final List<Map<String, dynamic>> maps = await db.query(
+        'pds_plans',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (maps.isEmpty) {
+        throw Exception('Failed to retrieve updated PDS plan with id: $id');
+      }
+
+      return PDSPlan.fromMap(maps.first);
+    } catch (e) {
+      print('Error updating PDS plan: $e');
+      rethrow;
+    }
   }
 
   Future<PDSPlan?> getPDSPlanByDate(DateTime date) async {

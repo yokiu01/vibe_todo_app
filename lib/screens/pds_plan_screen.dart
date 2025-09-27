@@ -232,6 +232,37 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                 ),
               ),
               const Spacer(),
+              // Notion 동기화 버튼
+              GestureDetector(
+                onTap: _syncToNotion,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3B82F6).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.sync,
+                        size: 14,
+                        color: const Color(0xFF3B82F6),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Notion',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: const Color(0xFF3B82F6),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               // 시간 간격 선택 토글
               Container(
                 decoration: BoxDecoration(
@@ -830,12 +861,17 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                         });
 
                         _debounceTimer?.cancel();
-                        _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+                        _debounceTimer = Timer(const Duration(milliseconds: 1000), () {
                           _saveFreeformPlan(slot.key, value);
                         });
                       },
                       onSubmitted: (value) {
                         _debounceTimer?.cancel();
+                        _saveFreeformPlan(slot.key, value);
+                      },
+                      onEditingComplete: () {
+                        _debounceTimer?.cancel();
+                        final value = _planControllers[slot.key]?.text ?? '';
                         _saveFreeformPlan(slot.key, value);
                       },
                     ),
@@ -1031,6 +1067,92 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
 
     // 기본값으로 첫 번째 슬롯
     return timeSlots.first.key;
+  }
+
+  /// Notion에 수동 동기화
+  Future<void> _syncToNotion() async {
+    try {
+      if (!await _authService.isAuthenticated()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Notion API 키가 설정되지 않았습니다'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 로딩 상태 표시
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text('Notion에 동기화 중...'),
+              ],
+            ),
+            backgroundColor: Color(0xFF3B82F6),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+
+      final pdsProvider = context.read<PDSDiaryProvider>();
+      final currentPlan = pdsProvider.getPDSPlan(_selectedDate);
+
+      if (currentPlan != null) {
+        final apiService = _authService.apiService;
+        if (apiService != null) {
+          await apiService.syncPDSData(
+            _selectedDate,
+            currentPlan.freeformPlans,
+            currentPlan.actualActivities,
+            currentPlan.seeNotes,
+          );
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Notion 동기화 완료!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('동기화할 데이터가 없습니다'),
+              backgroundColor: Colors.grey,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('수동 Notion 동기화 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('동기화 실패: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
 }

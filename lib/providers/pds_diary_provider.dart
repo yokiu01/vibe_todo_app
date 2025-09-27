@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import '../models/pds_plan.dart';
 import '../services/database_service.dart';
+import '../services/notion_auth_service.dart';
 import '../utils/helpers.dart';
 
 class PDSDiaryProvider with ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService();
-  
+  final NotionAuthService _notionAuthService = NotionAuthService();
+
   List<PDSPlan> _pdsPlans = [];
   bool _isLoading = false;
   String? _error;
@@ -151,24 +153,38 @@ class PDSDiaryProvider with ChangeNotifier {
   }
 
   String _mapToJson(Map<String, String> map) {
-    return map.entries.map((e) => '${e.key}=${e.value}').join('&');
+    return map.entries.map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}').join('&');
   }
 
   Map<String, String> _jsonToMap(String json) {
     if (json.isEmpty) return {};
     final Map<String, String> result = {};
 
-    // 기존 형식(콜론과 파이프) 지원을 위한 migration
-    if (json.contains('|') && json.contains(':')) {
-      final entries = json.split('|');
-      for (final entry in entries) {
-        final parts = entry.split(':');
-        if (parts.length >= 2) {
-          result[parts[0]] = parts.sublist(1).join(':');
+    try {
+      // 기존 형식(콜론과 파이프) 지원을 위한 migration
+      if (json.contains('|') && json.contains(':')) {
+        final entries = json.split('|');
+        for (final entry in entries) {
+          final parts = entry.split(':');
+          if (parts.length >= 2) {
+            result[parts[0]] = parts.sublist(1).join(':');
+          }
+        }
+      } else {
+        // 새로운 형식(등호와 앰퍼샌드) with URL decoding
+        final entries = json.split('&');
+        for (final entry in entries) {
+          final parts = entry.split('=');
+          if (parts.length >= 2) {
+            final key = Uri.decodeComponent(parts[0]);
+            final value = Uri.decodeComponent(parts.sublist(1).join('='));
+            result[key] = value;
+          }
         }
       }
-    } else {
-      // 새로운 형식(등호와 앰퍼샌드)
+    } catch (e) {
+      print('Error parsing JSON to map: $e');
+      // Fallback to basic parsing
       final entries = json.split('&');
       for (final entry in entries) {
         final parts = entry.split('=');
@@ -247,13 +263,26 @@ class PDSDiaryProvider with ChangeNotifier {
 
       if (index != -1) {
         _pdsPlans[index] = updatedPlan;
+        print('PDSDiaryProvider: 기존 계획 업데이트됨 (인덱스: $index)');
       } else {
         _pdsPlans.add(updatedPlan);
+        print('PDSDiaryProvider: 새 계획 추가됨');
       }
 
       // 변경 알림
       notifyListeners();
       print('PDSDiaryProvider: 데이터 업데이트 및 알림 완료');
+
+      // 저장 성공 확인
+      final verifyPlan = getPDSPlan(date);
+      if (verifyPlan != null && verifyPlan.freeformPlans?[timeSlot] == content.trim()) {
+        print('PDSDiaryProvider: 저장 검증 성공');
+      } else {
+        print('PDSDiaryProvider: 저장 검증 실패');
+      }
+
+      // Notion 동기화 (비동기로 실행, 실패해도 로컬 저장은 성공)
+      _syncToNotionAsync(date);
     } catch (e) {
       print('PDSDiaryProvider: saveFreeformPlan 오류: $e');
       _error = e.toString();
@@ -304,6 +333,9 @@ class PDSDiaryProvider with ChangeNotifier {
       // 변경 알림
       notifyListeners();
       print('PDSDiaryProvider: 실제 활동 데이터 업데이트 및 알림 완료');
+
+      // Notion 동기화 (비동기로 실행, 실패해도 로컬 저장은 성공)
+      _syncToNotionAsync(date);
     } catch (e) {
       print('PDSDiaryProvider: saveActualActivity 오류: $e');
       _error = e.toString();
@@ -340,12 +372,43 @@ class PDSDiaryProvider with ChangeNotifier {
       // 변경 알림
       notifyListeners();
       print('PDSDiaryProvider: 회고 노트 데이터 업데이트 및 알림 완료');
+
+      // Notion 동기화 (비동기로 실행, 실패해도 로컬 저장은 성공)
+      _syncToNotionAsync(date);
     } catch (e) {
       print('PDSDiaryProvider: saveSeeNotes 오류: $e');
       _error = e.toString();
       notifyListeners();
       rethrow;
     }
+  }
+
+  /// Notion에 비동기로 동기화 (백그라운드에서 실행)
+  void _syncToNotionAsync(DateTime date) {
+    // 비동기로 실행하여 UI를 블록하지 않음
+    Future.delayed(Duration.zero, () async {
+      try {
+        if (await _notionAuthService.isAuthenticated()) {
+          final plan = getPDSPlan(date);
+          if (plan != null) {
+            final apiService = _notionAuthService.apiService;
+            if (apiService != null) {
+              print('PDSDiaryProvider: Notion 동기화 시작 - ${date.toIso8601String().split('T')[0]}');
+              await apiService.syncPDSData(
+                date,
+                plan.freeformPlans,
+                plan.actualActivities,
+                plan.seeNotes,
+              );
+              print('PDSDiaryProvider: Notion 동기화 완료');
+            }
+          }
+        }
+      } catch (e) {
+        print('PDSDiaryProvider: Notion 동기화 실패 (로컬 데이터는 보존됨): $e');
+        // Notion 동기화 실패해도 로컬 데이터는 그대로 유지
+      }
+    });
   }
 }
 
