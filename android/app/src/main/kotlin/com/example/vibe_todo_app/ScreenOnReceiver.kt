@@ -22,9 +22,18 @@ class ScreenOnReceiver : BroadcastReceiver() {
 
                 // 잠금화면 설정 확인 (SharedPreferences에서)
                 val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                val isLockScreenEnabled = prefs.getBoolean("flutter.lock_screen_enabled", false)
+                val isLockScreenEnabled = prefs.getBoolean("flutter.lock_screen_enabled", true)
 
-                Log.d("ScreenOnReceiver", "Lock screen enabled: $isLockScreenEnabled")
+                Log.d("ScreenOnReceiver", "Lock screen enabled from SharedPreferences: $isLockScreenEnabled")
+
+                // 모든 SharedPreferences 값 로깅 (디버깅용)
+                val allPrefs = prefs.all
+                Log.d("ScreenOnReceiver", "All SharedPreferences keys: ${allPrefs.keys}")
+                for ((key, value) in allPrefs) {
+                    if (key.contains("lock")) {
+                        Log.d("ScreenOnReceiver", "Preference: $key = $value")
+                    }
+                }
 
                 if (isLockScreenEnabled) {
                     Log.d("ScreenOnReceiver", "Starting LockScreenActivity")

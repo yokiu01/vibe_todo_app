@@ -41,12 +41,12 @@ class LockScreenService {
 
   static Future<bool> isLockScreenEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('flutter.lock_screen_enabled') ?? true;
+    return prefs.getBool('lock_screen_enabled') ?? true;
   }
 
   static Future<void> setLockScreenEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('flutter.lock_screen_enabled', enabled);
+    await prefs.setBool('lock_screen_enabled', enabled);
 
     // Foreground Service 시작/중지
     try {
