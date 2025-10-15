@@ -32,6 +32,33 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // 잠금화면 서비스 제어 채널
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "plan_do_lock_screen").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startForegroundService" -> {
+                    try {
+                        LockScreenForegroundService.startService(this)
+                        Log.d("MainActivity", "Foreground service started")
+                        result.success(null)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error starting foreground service: $e")
+                        result.error("SERVICE_ERROR", "Failed to start foreground service", e.toString())
+                    }
+                }
+                "stopForegroundService" -> {
+                    try {
+                        LockScreenForegroundService.stopService(this)
+                        Log.d("MainActivity", "Foreground service stopped")
+                        result.success(null)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error stopping foreground service: $e")
+                        result.error("SERVICE_ERROR", "Failed to stop foreground service", e.toString())
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         // 락 스크린 모드 채널 (MainActivity용)
         val lockScreenChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lock_screen_mode")
         lockScreenChannel.setMethodCallHandler { call, result ->

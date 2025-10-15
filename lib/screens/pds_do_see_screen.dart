@@ -382,7 +382,6 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
   Widget _buildPlanCard(TimeSlot slot, Map<String, String> plannedActivities, List<Item> dailyTasks) {
     final plannedText = plannedActivities[slot.key] ?? '';
 
-    // 해당 시간대의 할일 찾기
     final slotTasks = dailyTasks.where((task) {
       if (task.dueDate == null) return false;
       final taskHour = task.dueDate!.hour;
@@ -391,76 +390,83 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
 
     final hasContent = plannedText.isNotEmpty || slotTasks.isNotEmpty;
 
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: hasContent ? const Color(0xFFFEF3C7) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: hasContent ? const Color(0xFFF59E0B) : const Color(0xFFE2E8F0),
-          width: hasContent ? 2 : 1,
+    return GestureDetector(
+      onTap: () => _showEditPlanDialog(slot, plannedText),
+      child: Container(
+        height: 80,
+        decoration: BoxDecoration(
+          color: hasContent ? const Color(0xFFFEF3C7) : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: hasContent ? const Color(0xFFF59E0B) : const Color(0xFFE2E8F0),
+            width: hasContent ? 2 : 1,
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 시간 표시 (왼쪽 상단)
-            Text(
-              slot.display,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: hasContent ? const Color(0xFFF59E0B) : const Color(0xFF1F2937),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    slot.display,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: hasContent ? const Color(0xFFF59E0B) : const Color(0xFF1F2937),
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.edit, size: 12, color: Colors.grey[400]),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            // 계획 내용 영역
-            Expanded(
-              child: plannedText.isNotEmpty
-                  ? Text(
-                      plannedText,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF1F2937),
-                        height: 1.4,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    )
-                  : slotTasks.isNotEmpty
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: slotTasks.take(2).map((task) => Container(
-                            margin: const EdgeInsets.only(bottom: 2),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: task.status == ItemStatus.completed ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              task.title,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          )).toList(),
-                        )
-                      : const Text(
-                          '계획 없음',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF9CA3AF),
-                            fontStyle: FontStyle.italic,
-                          ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: plannedText.isNotEmpty
+                    ? Text(
+                        plannedText,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1F2937),
+                          height: 1.4,
                         ),
-            ),
-          ],
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    : slotTasks.isNotEmpty
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: slotTasks.take(2).map((task) => Container(
+                              margin: const EdgeInsets.only(bottom: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: task.status == ItemStatus.completed ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                task.title,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            )).toList(),
+                          )
+                        : const Text(
+                            '계획 없음',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF9CA3AF),
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -812,6 +818,54 @@ class _PDSDoSeeScreenState extends State<PDSDoSeeScreen> {
         ),
       );
     }
+  }
+
+  void _showEditPlanDialog(TimeSlot slot, String currentText) {
+    final controller = TextEditingController(text: currentText);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${slot.display} Plan 편집'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '계획 입력...',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 5,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                await context.read<PDSDiaryProvider>().saveFreeformPlan(
+                  _selectedDate,
+                  slot.key,
+                  controller.text,
+                );
+                Navigator.pop(context);
+                _loadCurrentPlan();
+              } catch (e) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('저장 실패: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Notion에 수동 동기화

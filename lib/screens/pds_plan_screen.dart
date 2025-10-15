@@ -27,8 +27,6 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   bool _isLoadingNotionTasks = false;
   final NotionAuthService _authService = NotionAuthService();
 
-  // 시간 간격 설정
-  int _timeInterval = 60; // 기본 1시간 (60분)
 
   @override
   void initState() {
@@ -262,22 +260,6 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              // 시간 간격 선택 토글
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildTimeIntervalButton('1시간', 60),
-                    _buildTimeIntervalButton('30분', 30),
-                    _buildTimeIntervalButton('15분', 15),
-                  ],
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -382,6 +364,14 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   }
 
   Widget _buildScheduledColumn(List<TimeSlot> timeSlots) {
+    final sortedTasks = List<NotionTask>.from(_notionTasks)
+      ..sort((a, b) {
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -394,7 +384,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               ),
             ),
           )
-        else if (_notionTasks.isEmpty)
+        else if (sortedTasks.isEmpty)
           Container(
             padding: const EdgeInsets.all(20),
             child: Center(
@@ -420,11 +410,10 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
             ),
           )
         else
-          ..._notionTasks.map((task) {
-            final index = _notionTasks.indexOf(task);
+          ...sortedTasks.asMap().entries.map((entry) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: _buildDraggableNotionTaskCard(task, index),
+              child: _buildDraggableNotionTaskCard(entry.value, entry.key),
             );
           }).toList(),
       ],
@@ -581,7 +570,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         ),
       ),
       childWhenDragging: Container(
-        height: 60,
+        height: 80,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.grey[100],
@@ -600,62 +589,277 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         ),
       ),
       onDragStarted: () {
-        // 드래그 시작 시 시각적 힌트 활성화
-        setState(() {
-          // 이 상태는 time slot cards에서 확인할 수 있도록 함
-        });
+        setState(() {});
       },
       onDragEnd: (details) {
-        // 드래그 종료 시 시각적 힌트 비활성화
-        setState(() {
-          // 드래그 상태 리셋
-        });
+        setState(() {});
       },
       child: GestureDetector(
-        onTap: () => _showTaskEditDialog(task),
+        onTap: () => _showTaskDetailDialog(task),
         child: _buildNotionTaskCard(task, index),
       ),
     );
   }
 
-  /// 태스크 편집 다이얼로그 표시
-  void _showTaskEditDialog(NotionTask task) {
+  /// 태스크 세부 정보 다이얼로그
+  void _showTaskDetailDialog(NotionTask task) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('태스크 편집'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '제목: ${task.title}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            if (task.description != null)
-              Text('설명: ${task.description}'),
-            const SizedBox(height: 8),
-            if (task.dueDate != null)
-              Text('시간: ${DateFormat('M월 d일 HH:mm', 'ko').format(task.dueDate!)}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('확인'),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (task.project != null) ...[
+                        _buildDetailRow(Icons.folder_outlined, '프로젝트', task.project!),
+                        const SizedBox(height: 12),
+                      ],
+                      GestureDetector(
+                        onTap: () => _showDateTimePicker(task),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.calendar_today, size: 18, color: Color(0xFF8B7355)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '날짜 및 시간',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF9CA3AF),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      task.dueDate != null
+                                          ? '${DateFormat('M월 d일 (E) HH:mm', 'ko').format(task.dueDate!)} ${_getDaysRemaining(task.dueDate!)}'
+                                          : '날짜 설정하기',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF374151),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.edit, size: 16, color: Color(0xFF9CA3AF)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (task.status != null) ...[
+                        _buildDetailRow(Icons.flag_outlined, '상태', task.status!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (task.clarification != null) ...[
+                        _buildDetailRow(Icons.lightbulb_outline, '명료화', task.clarification!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (task.description != null && task.description!.isNotEmpty) ...[
+                        const Divider(height: 24),
+                        const Text(
+                          '설명',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          task.description!,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B7355),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('확인', style: TextStyle(fontSize: 16)),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  Future<void> _showDateTimePicker(NotionTask task) async {
+    final now = DateTime.now();
+    final initialDate = task.dueDate ?? now;
+
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 2),
+      locale: const Locale('ko', 'KR'),
+    );
+
+    if (selectedDate == null) return;
+
+    if (!mounted) return;
+
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initialDate),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedTime == null) return;
+
+    final newDateTime = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      selectedTime.hour,
+      selectedTime.minute,
+    );
+
+    try {
+      final apiService = _authService.apiService;
+      if (apiService != null) {
+        await apiService.updateTaskDateTime(task.id, newDateTime);
+        await _loadNotionTasks();
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${task.title}의 날짜가 ${DateFormat('M월 d일 HH:mm', 'ko').format(newDateTime)}로 변경되었습니다',
+              ),
+              backgroundColor: const Color(0xFF22C55E),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('날짜 변경 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF8B7355)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF9CA3AF),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF374151),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getDaysRemaining(DateTime dueDate) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    final diff = due.difference(today).inDays;
+
+    if (diff < 0) return 'D+${-diff}';
+    if (diff == 0) return 'D-Day';
+    return 'D-$diff';
   }
 
   /// Notion 할일 카드 위젯
   Widget _buildNotionTaskCard(NotionTask task, int index, {bool isDragging = false}) {
     final isCompleted = task.isCompleted;
+    final daysRemaining = task.dueDate != null ? _getDaysRemaining(task.dueDate!) : null;
 
     return Container(
-      height: 60,
+      height: 80,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: isCompleted ? const Color(0xFFF0FDF4) : Colors.white,
@@ -667,7 +871,6 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                   ? const Color(0xFF3B82F6)
                   : const Color(0xFFE2E8F0)),
           width: isDragging ? 2 : 1,
-          style: isDragging ? BorderStyle.solid : BorderStyle.solid,
         ),
         boxShadow: [
           BoxShadow(
@@ -681,17 +884,47 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Text(
-              task.title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF1F2937),
-                decoration: isCompleted ? TextDecoration.lineThrough : null,
-                height: 1.3,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isCompleted ? const Color(0xFF22C55E) : const Color(0xFF1F2937),
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                    height: 1.3,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (task.project != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.folder_outlined,
+                        size: 10,
+                        color: const Color(0xFF8B7355),
+                      ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          task.project!,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF8B7355),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
           Row(
@@ -711,18 +944,26 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-              ] else ...[
-                Text(
-                  DateFormat('M/d').format(_selectedDate),
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
+              ],
+              if (daysRemaining != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _getDaysRemainingColor(daysRemaining),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    daysRemaining,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
               const Spacer(),
-              // 드래그 힌트 아이콘 (grip 스타일)
               Container(
                 padding: const EdgeInsets.all(2),
                 child: Column(
@@ -753,6 +994,14 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         ],
       ),
     );
+  }
+
+  Color _getDaysRemainingColor(String daysRemaining) {
+    if (daysRemaining.contains('D+')) return const Color(0xFFEF4444);
+    if (daysRemaining == 'D-Day') return const Color(0xFFF59E0B);
+    final days = int.tryParse(daysRemaining.replaceAll('D-', '')) ?? 999;
+    if (days <= 3) return const Color(0xFFF59E0B);
+    return const Color(0xFF3B82F6);
   }
 
   Color _getNotionStatusColor(String status) {
@@ -898,71 +1147,16 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
     _focusNodes[slot.key]?.requestFocus();
   }
 
-  Widget _buildTimeIntervalButton(String label, int minutes) {
-    final isSelected = _timeInterval == minutes;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _timeInterval = minutes;
-          // 시간 간격 변경 시 컨트롤러 재초기화
-          _reinitializeControllers();
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF3B82F6) : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: isSelected ? Colors.white : const Color(0xFF6B7280),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _reinitializeControllers() {
-    // 기존 컨트롤러 정리
-    _planControllers.values.forEach((controller) => controller.dispose());
-    _focusNodes.values.forEach((focusNode) => focusNode.dispose());
-    _planControllers.clear();
-    _focusNodes.clear();
-
-    // 새로운 시간 간격으로 컨트롤러 재생성
-    _initializeControllers();
-    _loadCurrentPlan();
-  }
 
 
   Future<void> _saveFreeformPlan(String timeSlot, String content) async {
     try {
-      print('PDS PLAN: Plan 저장 시작 - ${_selectedDate.toIso8601String().split('T')[0]} $timeSlot: $content');
-
-      // PDSDiaryProvider를 통해 저장
       await context.read<PDSDiaryProvider>().saveFreeformPlan(
         _selectedDate,
         timeSlot,
         content,
       );
-
-      print('PDS PLAN: Plan 저장 완료');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Plan이 저장되었습니다'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
     } catch (e) {
-      print('PDS PLAN: Plan 저장 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

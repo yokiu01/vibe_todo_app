@@ -21,7 +21,8 @@
       "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" shell \"am start -n com.example.vibe_todo_app/com.example.vibe_todo_app.MainActivity\")",
       "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" shell \"input keyevent 26 && sleep 1 && input keyevent 26\")",
       "Bash(printf \"r\\n\")",
-      "Bash(dart:*)"
+      "Bash(dart:*)",
+      "Bash(printf:*)"
     ],
     "deny": [],
     "ask": []

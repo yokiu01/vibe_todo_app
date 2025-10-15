@@ -52,7 +52,17 @@ class ScreenOnReceiver : BroadcastReceiver() {
                 Log.d("ScreenOnReceiver", "Screen turned OFF")
             }
             Intent.ACTION_BOOT_COMPLETED -> {
-                Log.d("ScreenOnReceiver", "Boot completed")
+                Log.d("ScreenOnReceiver", "Boot completed - Starting foreground service")
+
+                val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                val isLockScreenEnabled = prefs.getBoolean("flutter.lock_screen_enabled", true)
+
+                if (isLockScreenEnabled) {
+                    Log.d("ScreenOnReceiver", "Lock screen enabled - starting foreground service")
+                    LockScreenForegroundService.startService(context)
+                } else {
+                    Log.d("ScreenOnReceiver", "Lock screen disabled - not starting service")
+                }
             }
             else -> {
                 Log.d("ScreenOnReceiver", "Unknown action: ${intent.action}")

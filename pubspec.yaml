@@ -1,5 +1,5 @@
-name: second_brain
-description: "Second Brain - 개인 생산성 관리 앱"
+name: focus_days
+description: "포커스 데이즈 - 개인 생산성 관리 앱"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -84,6 +84,12 @@ dependencies:
   
   # UUID
   uuid: ^4.4.0
+
+  # App Lock
+  flutter_app_lock: ^4.2.0+2
+
+  # AI Services (for OpenAI GPT API)
+  # openai_dart: ^0.3.0  # 실제 패키지 확인 필요
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/notion_auth_service.dart';
 import '../models/notion_task.dart';
+import '../providers/ai_provider.dart';
 
 class ClarificationScreen extends StatefulWidget {
   const ClarificationScreen({Key? key}) : super(key: key);
@@ -1359,6 +1361,399 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
     );
   }
 
+  /// AI 명료화 다이얼로그
+  Future<void> _showAIClarificationDialog(NotionTask item) async {
+    final aiProvider = Provider.of<AIProvider>(context, listen: false);
+
+    if (!aiProvider.isConfigured) {
+      _showErrorSnackBar('AI 설정이 필요합니다. 설정 화면에서 API 키를 입력해주세요.');
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 헤더
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.auto_awesome,
+                      color: Color(0xFF8B5CF6),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AI 자동 명료화',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'AI가 작업을 분석하여 최적의 분류를 제안합니다.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // 분석 중 표시
+              Consumer<AIProvider>(
+                builder: (context, aiProvider, child) {
+                  if (aiProvider.isClarifying) {
+                    return Column(
+                      children: [
+                        const CircularProgressIndicator(
+                          color: Color(0xFF8B5CF6),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '"${item.title}" 분석 중...',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF6B7280),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    );
+                  }
+
+                  if (aiProvider.lastClarification != null) {
+                    return _buildClarificationResult(aiProvider.lastClarification!, item);
+                  }
+
+                  // 초기 상태 또는 오류 상태
+                  return Column(
+                    children: [
+                      const Icon(
+                        Icons.psychology,
+                        size: 48,
+                        color: Color(0xFF8B5CF6),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '"${item.title}"을(를) 분석하시겠습니까?',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('취소'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () => _startAIClarification(item),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF8B5CF6),
+                              ),
+                              child: const Text(
+                                '분석 시작',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// AI 명료화 시작
+  Future<void> _startAIClarification(NotionTask item) async {
+    final aiProvider = Provider.of<AIProvider>(context, listen: false);
+
+    try {
+      await aiProvider.clarifyTask(
+        title: item.title,
+        description: item.description,
+      );
+    } catch (e) {
+      _showErrorSnackBar('AI 분석 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 명료화 결과 위젯
+  Widget _buildClarificationResult(Map<String, dynamic> clarification, NotionTask item) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 개선된 제목
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFF10B981).withOpacity(0.3),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.edit,
+                      size: 16,
+                      color: Color(0xFF10B981),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '개선된 제목',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  clarification['clarified_title'] ?? item.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 분석 정보
+          _buildInfoCard('우선순위', clarification['priority'] ?? '보통', Icons.flag),
+          _buildInfoCard('카테고리', clarification['category'] ?? '기타', Icons.category),
+          _buildInfoCard('예상 소요 시간', '${clarification['estimated_duration'] ?? 30}분', Icons.schedule),
+          _buildInfoCard('권장 시간대', clarification['suggested_time'] ?? '오전', Icons.access_time),
+
+          // 세부 단계
+          if (clarification['breakdown'] != null && (clarification['breakdown'] as List).isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF3B82F6).withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.list,
+                        size: 16,
+                        color: Color(0xFF3B82F6),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        '세부 단계',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF3B82F6),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ...(clarification['breakdown'] as List).asMap().entries.map((entry) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${entry.key + 1}. ',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              entry.value.toString(),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+
+          // 액션 버튼들
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Provider.of<AIProvider>(context, listen: false).clearLastClarification();
+                  },
+                  icon: const Icon(Icons.close),
+                  label: const Text('취소'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _applyAIClarification(clarification, item),
+                  icon: const Icon(Icons.check, color: Colors.white),
+                  label: const Text(
+                    '적용',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 정보 카드 위젯
+  Widget _buildInfoCard(String label, String value, IconData icon) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: Colors.grey[600],
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[700],
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// AI 명료화 결과 적용
+  Future<void> _applyAIClarification(Map<String, dynamic> clarification, NotionTask item) async {
+    Navigator.of(context).pop();
+    Provider.of<AIProvider>(context, listen: false).clearLastClarification();
+
+    final category = clarification['category'] as String?;
+    final priority = clarification['priority'] as String?;
+
+    // 카테고리에 따라 적절한 분류 수행
+    if (category != null) {
+      switch (category.toLowerCase()) {
+        case '업무':
+        case 'work':
+          await _classifyItem(item, '다음행동');
+          break;
+        case '프로젝트':
+        case 'project':
+          await _classifyItem(item, '프로젝트');
+          break;
+        case '목표':
+        case 'goal':
+          await _classifyItem(item, '목표');
+          break;
+        case '개인':
+        case 'personal':
+          await _classifyItem(item, '다음행동');
+          break;
+        default:
+          await _classifyItem(item, '다음행동');
+      }
+    } else {
+      await _classifyItem(item, '다음행동');
+    }
+
+    _showSuccessSnackBar('AI 분석 결과가 적용되었습니다: ${clarification['clarified_title']}');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1492,10 +1887,6 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
   }
 
   Widget _buildItemCard(NotionTask item) {
-    // 기본 상태 표시
-    String statusText = '명료화 필요';
-    Color statusColor = Colors.orange;
-
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -1503,7 +1894,6 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 제목
             Text(
               item.title,
               style: const TextStyle(
@@ -1511,41 +1901,68 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            
-            // 설명
+
             if (item.description != null && item.description!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                item.description!,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => _showEditDescriptionDialog(item),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.description!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.edit, size: 16, color: Colors.grey[500]),
+                    ],
+                  ),
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => _showEditDescriptionDialog(item),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0), style: BorderStyle.solid),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '내용을 추가하려면 탭하세요',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[400],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.add, size: 16, color: Colors.grey[400]),
+                    ],
+                  ),
                 ),
               ),
             ],
-            
-            // 상태 표시
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: statusColor.withOpacity(0.3)),
-              ),
-              child: Text(
-                statusText,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: statusColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // 질문
+
+            const SizedBox(height: 20),
+
             const Text(
               '이것은 실행 가능한가요?',
               style: TextStyle(
@@ -1553,10 +1970,26 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            
-            const SizedBox(height: 12),
-            
-            // 버튼들
+
+            const SizedBox(height: 16),
+
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 16),
+              child: OutlinedButton.icon(
+                onPressed: () => _showAIClarificationDialog(item),
+                icon: const Icon(Icons.auto_awesome, color: Color(0xFF8B5CF6)),
+                label: const Text(
+                  'AI로 자동 명료화',
+                  style: TextStyle(color: Color(0xFF8B5CF6)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF8B5CF6)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+
             Row(
               children: [
                 Expanded(
@@ -1592,6 +2025,58 @@ class _ClarificationScreenState extends State<ClarificationScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditDescriptionDialog(NotionTask item) {
+    final controller = TextEditingController(text: item.description ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('내용 수정'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '내용을 입력하세요',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 5,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                final updateProperties = <String, dynamic>{
+                  'description': {
+                    'rich_text': [
+                      {
+                        'text': {
+                          'content': controller.text,
+                        }
+                      }
+                    ]
+                  }
+                };
+
+                await _authService.apiService!.updatePage(item.id, updateProperties);
+                Navigator.pop(context);
+                _loadTodoItems();
+                _showSuccessSnackBar('내용이 수정되었습니다');
+              } catch (e) {
+                Navigator.pop(context);
+                _showErrorSnackBar('수정 실패: $e');
+              }
+            },
+            child: const Text('저장'),
+          ),
+        ],
       ),
     );
   }

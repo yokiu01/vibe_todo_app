@@ -4,165 +4,132 @@ import 'dart:convert';
 import '../models/task.dart';
 
 class LockScreenService {
-  static const MethodChannel _channel = MethodChannel('plan_do_lock_screen');
+  static const _channel = MethodChannel('plan_do_lock_screen');
   static Function? _onScreenOn;
   static bool _isInitialized = false;
   static DateTime? _lastScreenOnTime;
 
-  // 초기화 및 네이티브 이벤트 리스너 설정
   static void initialize({Function? onScreenOn}) {
     if (_isInitialized) return;
-
     _onScreenOn = onScreenOn;
     _channel.setMethodCallHandler(_handleMethodCall);
     _isInitialized = true;
   }
 
-  // 네이티브에서 오는 콜백 처리
   static Future<void> _handleMethodCall(MethodCall call) async {
-    print('LockScreenService: Method call received: ${call.method}');
     switch (call.method) {
       case 'onScreenOn':
         final now = DateTime.now();
-        print('LockScreenService: Screen on event received at $now');
-        
-        // 중복 호출 방지 (1초 이내 중복 호출 무시)
-        if (_lastScreenOnTime != null && 
-            now.difference(_lastScreenOnTime!).inSeconds < 1) {
-          print('LockScreenService: Skipping duplicate screen on event');
-          return;
-        }
-        
+        if (_lastScreenOnTime != null &&
+            now.difference(_lastScreenOnTime!).inSeconds < 1) return;
+
         _lastScreenOnTime = now;
         final isEnabled = await isLockScreenEnabled();
-        print('LockScreenService: Screen on event received, lock screen enabled: $isEnabled');
-        print('LockScreenService: _onScreenOn callback is null: ${_onScreenOn == null}');
-        
-        if (_onScreenOn != null && isEnabled) {
-          print('LockScreenService: Calling _onScreenOn callback');
-          _onScreenOn!();
-        } else {
-          print('LockScreenService: Not calling callback - _onScreenOn: ${_onScreenOn != null}, isEnabled: $isEnabled');
-        }
+        if (_onScreenOn != null && isEnabled) _onScreenOn!();
         break;
       case 'onUserPresent':
-        print('User present event received');
-        // 사용자가 잠금해제했을 때는 오버레이를 닫을 수도 있음
         break;
     }
   }
 
-  // 오버레이 권한 확인 - Android에서 직접 처리하므로 항상 true 반환
-  static Future<bool> hasOverlayPermission() async {
-    return true; // Android에서 직접 처리하므로 항상 true
-  }
+  static Future<bool> hasOverlayPermission() async => true;
+  static Future<void> requestOverlayPermission() async {}
 
-  // 오버레이 권한 요청 - Android에서 직접 처리하므로 아무것도 하지 않음
-  static Future<void> requestOverlayPermission() async {
-    // Android에서 직접 처리하므로 아무것도 하지 않음
-  }
-
-  // 수동으로 오버레이 표시 (테스트용)
   static Future<void> showOverlayManually() async {
-    try {
-      print('LockScreenService: showOverlayManually called');
-      print('LockScreenService: _onScreenOn is null: ${_onScreenOn == null}');
-      
-      // 새로운 lockscreen을 직접 호출
-      if (_onScreenOn != null) {
-        print('LockScreenService: Calling _onScreenOn callback directly');
-        _onScreenOn!();
-        return;
-      }
+    if (_onScreenOn != null) _onScreenOn!();
+  }
 
-      print('LockScreenService: _onScreenOn is null - Android will handle lock screen display');
+  static Future<bool> isLockScreenEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('flutter.lock_screen_enabled') ?? true;
+  }
+
+  static Future<void> setLockScreenEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('flutter.lock_screen_enabled', enabled);
+
+    // Foreground Service 시작/중지
+    try {
+      if (enabled) {
+        await startForegroundService();
+      } else {
+        await stopForegroundService();
+      }
     } catch (e) {
-      print('Error showing overlay manually: $e');
+      print('Foreground service control error: $e');
     }
   }
 
-  // 잠금화면에서 plan과 do를 볼 수 있는지 설정
-  static Future<bool> isLockScreenEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('lock_screen_enabled') ?? true; // 기본값을 true로 변경
+  static Future<void> startForegroundService() async {
+    try {
+      await _channel.invokeMethod('startForegroundService');
+    } catch (e) {
+      print('Start foreground service error: $e');
+    }
   }
-  
-  static Future<void> setLockScreenEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('lock_screen_enabled', enabled);
+
+  static Future<void> stopForegroundService() async {
+    try {
+      await _channel.invokeMethod('stopForegroundService');
+    } catch (e) {
+      print('Stop foreground service error: $e');
+    }
   }
-  
-  // 잠금화면에서 do를 수정할 수 있는지 설정
+
   static Future<bool> isLockScreenEditEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('lock_screen_edit_enabled') ?? false;
   }
-  
+
   static Future<void> setLockScreenEditEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lock_screen_edit_enabled', enabled);
   }
-  
-  // 잠금화면에 표시할 데이터 업데이트
+
   static Future<void> updateLockScreenData({
     required List<Task> todayTasks,
     required List<Task> currentTasks,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
-      // 오늘의 계획 (Plan)
-      final planData = todayTasks.map((task) => {
-        'id': task.id,
-        'title': task.title,
-        'startTime': task.startTime.toIso8601String(),
-        'endTime': task.endTime.toIso8601String(),
-        'category': task.category.displayName,
-        'status': task.status.name,
+
+      final planData = todayTasks.map((t) => {
+        'id': t.id,
+        'title': t.title,
+        'startTime': t.startTime.toIso8601String(),
+        'endTime': t.endTime.toIso8601String(),
+        'category': t.category.displayName,
+        'status': t.status.name,
       }).toList();
-      
-      // 현재 진행 중인 작업 (Do)
-      final doData = currentTasks.map((task) => {
-        'id': task.id,
-        'title': task.title,
-        'startTime': task.startTime.toIso8601String(),
-        'endTime': task.endTime.toIso8601String(),
-        'category': task.category.displayName,
-        'status': task.status.name,
+
+      final doData = currentTasks.map((t) => {
+        'id': t.id,
+        'title': t.title,
+        'startTime': t.startTime.toIso8601String(),
+        'endTime': t.endTime.toIso8601String(),
+        'category': t.category.displayName,
+        'status': t.status.name,
       }).toList();
-      
+
       await prefs.setString('lock_screen_plan_data', jsonEncode(planData));
       await prefs.setString('lock_screen_do_data', jsonEncode(doData));
-      
-      // 네이티브 위젯 업데이트
       await _channel.invokeMethod('updateLockScreenWidget');
-      
-    } catch (e) {
-      print('Error updating lock screen data: $e');
-    }
+    } catch (_) {}
   }
-  
-  // 잠금화면에서 작업 상태 업데이트
+
   static Future<void> updateTaskStatusFromLockScreen(String taskId, String status) async {
     try {
       await _channel.invokeMethod('updateTaskStatus', {
         'taskId': taskId,
         'status': status,
       });
-    } catch (e) {
-      print('Error updating task status from lock screen: $e');
-    }
+    } catch (_) {}
   }
-  
-  // 잠금화면에서 작업 완료 처리
+
   static Future<void> completeTaskFromLockScreen(String taskId) async {
     try {
-      await _channel.invokeMethod('completeTask', {
-        'taskId': taskId,
-      });
-    } catch (e) {
-      print('Error completing task from lock screen: $e');
-    }
+      await _channel.invokeMethod('completeTask', {'taskId': taskId});
+    } catch (_) {}
   }
 }
 

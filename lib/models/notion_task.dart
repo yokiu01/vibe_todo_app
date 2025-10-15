@@ -11,7 +11,8 @@ class NotionTask {
   final String? delegatedTo;
   final String? waitingFor;
   final String? nextActionSituation;
-  
+  final String? project;
+
   NotionTask({
     required this.id,
     required this.title,
@@ -25,6 +26,7 @@ class NotionTask {
     this.delegatedTo,
     this.waitingFor,
     this.nextActionSituation,
+    this.project,
   });
   
   /// Notion API 응답에서 NotionTask 생성
@@ -201,7 +203,28 @@ class NotionTask {
     } catch (e) {
       print('다음행동상황 추출 오류: $e');
     }
-    
+
+    // 프로젝트 추출 (relation 속성)
+    String? project;
+    try {
+      for (String key in ['프로젝트', 'Project', 'project']) {
+        if (properties[key] != null) {
+          final projectProperty = properties[key];
+          if (projectProperty is Map && projectProperty['relation'] is List) {
+            final relationArray = projectProperty['relation'] as List;
+            if (relationArray.isNotEmpty && relationArray[0] is Map) {
+              final relationId = relationArray[0]['id']?.toString();
+              if (relationId != null) {
+                project = relationId;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('프로젝트 추출 오류: $e');
+    }
+
     return NotionTask(
       id: notionData['id']?.toString() ?? '',
       title: title,
@@ -215,6 +238,7 @@ class NotionTask {
       delegatedTo: delegatedTo,
       waitingFor: waitingFor,
       nextActionSituation: nextActionSituation,
+      project: project,
     );
   }
   
@@ -336,9 +360,10 @@ class NotionTask {
       'delegated_to': delegatedTo,
       'waiting_for': waitingFor,
       'next_action_situation': nextActionSituation,
+      'project': project,
     };
   }
-  
+
   /// 로컬 데이터베이스에서 NotionTask 생성
   factory NotionTask.fromMap(Map<String, dynamic> map) {
     return NotionTask(
@@ -354,9 +379,10 @@ class NotionTask {
       delegatedTo: map['delegated_to'],
       waitingFor: map['waiting_for'],
       nextActionSituation: map['next_action_situation'],
+      project: map['project'],
     );
   }
-  
+
   /// 복사본 생성 (일부 필드 수정)
   NotionTask copyWith({
     String? id,
@@ -371,6 +397,7 @@ class NotionTask {
     String? delegatedTo,
     String? waitingFor,
     String? nextActionSituation,
+    String? project,
   }) {
     return NotionTask(
       id: id ?? this.id,
@@ -385,6 +412,7 @@ class NotionTask {
       delegatedTo: delegatedTo ?? this.delegatedTo,
       waitingFor: waitingFor ?? this.waitingFor,
       nextActionSituation: nextActionSituation ?? this.nextActionSituation,
+      project: project ?? this.project,
     );
   }
   

@@ -26,7 +26,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'productivity_app.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -121,6 +121,10 @@ class DatabaseService {
         freeform_plans TEXT,
         actual_activities TEXT,
         see_notes TEXT,
+        theme TEXT,
+        goal_and_expectation TEXT,
+        reflection TEXT,
+        tomorrow_preparation TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -463,6 +467,14 @@ class DatabaseService {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       ''');
+    }
+
+    if (oldVersion < 3) {
+      // PDS Plans table에 새로운 컬럼 추가
+      await db.execute('ALTER TABLE pds_plans ADD COLUMN theme TEXT');
+      await db.execute('ALTER TABLE pds_plans ADD COLUMN goal_and_expectation TEXT');
+      await db.execute('ALTER TABLE pds_plans ADD COLUMN reflection TEXT');
+      await db.execute('ALTER TABLE pds_plans ADD COLUMN tomorrow_preparation TEXT');
     }
   }
 }

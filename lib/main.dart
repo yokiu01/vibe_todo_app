@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -7,11 +6,10 @@ import 'providers/item_provider.dart';
 import 'providers/daily_plan_provider.dart';
 import 'providers/review_provider.dart';
 import 'providers/pds_diary_provider.dart';
-import 'screens/splash_screen.dart';
+import 'providers/ai_provider.dart';
 import 'screens/main_navigation.dart';
 import 'screens/lock_screen_standalone.dart';
 import 'services/lock_screen_service.dart';
-import 'services/lock_screen_mode_service.dart';
 import 'services/location_notification_service.dart';
 import 'services/time_notification_service.dart';
 
@@ -31,125 +29,25 @@ class ProductivityApp extends StatefulWidget {
 }
 
 class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingObserver {
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    // 앱 시작 시 캐시 초기화
-    LockScreenModeService.reset();
-
-    // 락 스크린 모드인지 확인하여 불필요한 초기화 건너뛰기
-    // 더 긴 지연 시간으로 라우팅 시스템이 완전히 초기화되도록 대기
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 200), () {
-        _initializeBasedOnRoute();
-      });
-    });
+    _initServices();
   }
 
-  void _initializeBasedOnRoute() async {
-    try {
-      // context가 유효한지 확인
-      if (!mounted) return;
-
-      // 현재 라우트 확인 - 안전한 방법 사용
-      final navigatorState = navigatorKey.currentState;
-      final currentContext = navigatorState?.context;
-
-      String? currentRoute;
-      if (currentContext != null) {
-        currentRoute = ModalRoute.of(currentContext)?.settings.name;
-      }
-
-      print('Current route detected: $currentRoute');
-
-      // 락 스크린 모드 감지 - Android에서 직접 확인
-      final isLockScreenMode = await LockScreenModeService.isLockScreenMode();
-      print('Lock screen mode from Android: $isLockScreenMode');
-
-      if (isLockScreenMode || currentRoute == '/lockScreenStandalone') {
-        // 락 스크린 모드: 최소한의 초기화만
-        print('Lock screen mode detected - minimal initialization');
-        _initializeLockScreenOnly();
-        
-        // 잠금화면 모드일 때는 라우트를 강제로 변경
-        if (currentRoute != '/lockScreenStandalone') {
-          print('Redirecting to lock screen standalone route');
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              navigatorState?.pushReplacementNamed('/lockScreenStandalone');
-            }
-          });
-        }
-      } else {
-        // 일반 앱 모드: 모든 서비스 초기화
-        print('Normal app mode - full initialization');
-        _initializeAllServices();
-      }
-    } catch (e) {
-      print('Error in _initializeBasedOnRoute: $e');
-      // 에러가 발생하면 기본적으로 모든 서비스 초기화
-      _initializeAllServices();
-    }
-  }
-
-  void _initializeLockScreenOnly() async {
-    try {
-      // 락 스크린에 필요한 최소한의 설정만
-      final isEnabled = await LockScreenService.isLockScreenEnabled();
-      if (!isEnabled) {
-        await LockScreenService.setLockScreenEnabled(true);
-        print('Lock screen enabled (minimal mode)');
-      }
-      print('Lock screen minimal initialization completed');
-    } catch (e) {
-      print('Error in minimal lock screen initialization: $e');
-    }
-  }
-
-  void _initializeAllServices() async {
-    // 위치 알림 서비스 초기화
-    await _initializeLocationNotificationService();
-
-    // 시간 알림 서비스 초기화
-    await _initializeTimeNotificationService();
-
-    // 락스크린 활성화 설정
-    await _initializeLockScreen();
-  }
-
-  Future<void> _initializeLocationNotificationService() async {
+  Future<void> _initServices() async {
     try {
       await LocationNotificationService().initialize();
-      print('Location notification service initialized');
-    } catch (e) {
-      print('Error initializing location notification service: $e');
-    }
-  }
-
-  Future<void> _initializeTimeNotificationService() async {
-    try {
       await TimeNotificationService().initialize();
-      print('Time notification service initialized');
-    } catch (e) {
-      print('Error initializing time notification service: $e');
-    }
-  }
 
-  Future<void> _initializeLockScreen() async {
-    try {
-      // 락스크린 설정만 저장 - 실제 화면 표시는 Android ScreenOnReceiver가 처리
-      final isEnabled = await LockScreenService.isLockScreenEnabled();
-      if (!isEnabled) {
-        await LockScreenService.setLockScreenEnabled(true);
-        print('Lock screen enabled by default (settings only - Android handles display)');
+      // 잠금화면 서비스 시작
+      final enabled = await LockScreenService.isLockScreenEnabled();
+      if (enabled) {
+        await LockScreenService.startForegroundService();
       }
-
-      print('Lock screen settings initialized (Android handles screen events)');
     } catch (e) {
-      print('Error initializing lock screen settings: $e');
+      print('Service initialization error: $e');
     }
   }
 
@@ -157,12 +55,6 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    print('App lifecycle state changed: $state');
   }
 
 
@@ -174,6 +66,9 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
         ChangeNotifierProvider(create: (_) => DailyPlanProvider()),
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
+        ChangeNotifierProvider(
+          create: (_) => AIProvider()..initialize(),
+        ),
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
@@ -319,11 +214,9 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
             behavior: SnackBarBehavior.floating,
           ),
         ),
-          initialRoute: '/',
-          routes: {
-            '/': (context) => const SplashScreen(),
-            '/main': (context) => const MainNavigation(),
-            '/lockScreenStandalone': (context) => MultiProvider(
+        home: const MainNavigation(),
+        routes: {
+          '/lockScreenStandalone': (context) => MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
             ],

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../services/notion_api_service.dart';
 import '../services/lock_screen_service.dart';
 import '../services/location_notification_service.dart';
 import '../services/time_notification_service.dart';
 import '../models/location.dart';
+import '../providers/ai_provider.dart';
+import '../services/ai_service.dart';
 import 'location_list_screen.dart';
 import 'location_demo_screen.dart';
 
@@ -76,19 +80,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _toggleLockScreen(bool value) async {
-    if (value && !_hasOverlayPermission) {
-      // 권한이 없으면 권한 요청
-      await _requestOverlayPermission();
-      return;
-    }
-
     try {
       await LockScreenService.setLockScreenEnabled(value);
       setState(() {
         _lockScreenEnabled = value;
       });
+
+      // 설정 완료 메시지
       _showSnackBar(
-        value ? '잠금화면 오버레이가 활성화되었습니다.' : '잠금화면 오버레이가 비활성화되었습니다.',
+        value
+          ? '잠금화면이 활성화되었습니다. 화면을 껐다 켜면 PDS 계획이 표시됩니다.'
+          : '잠금화면이 비활성화되었습니다.',
       );
     } catch (e) {
       _showSnackBar('설정 변경 실패: $e', isError: true);
@@ -427,6 +429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+
   Future<void> _testTimeNotification() async {
     try {
       final now = DateTime.now();
@@ -456,6 +459,465 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showSnackBar('테스트 알림이 전송되었습니다.');
     } catch (e) {
       _showSnackBar('테스트 알림 전송 실패: $e', isError: true);
+    }
+  }
+
+  /// AI 설정 다이얼로그
+  Future<void> _showAIConfigDialog() async {
+    final aiProvider = Provider.of<AIProvider>(context, listen: false);
+    final currentConfig = aiProvider.config;
+
+    final providerController = TextEditingController(text: currentConfig?.provider.toString().split('.').last ?? 'openai');
+    final apiKeyController = TextEditingController(text: currentConfig?.apiKey ?? '');
+    final modelController = TextEditingController(text: currentConfig?.model ?? 'gpt-4');
+
+    AIServiceProvider selectedProvider = currentConfig?.provider ?? AIServiceProvider.openai;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFFFDF6E3),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.smart_toy,
+                  color: Color(0xFF8B5CF6),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'AI 어시스턴트 설정',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF3C2A21),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'AI 제공자:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF3C2A21),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<AIServiceProvider>(
+                  value: selectedProvider,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                  items: AIServiceProvider.values.map((provider) {
+                    return DropdownMenuItem(
+                      value: provider,
+                      child: Text(provider.toString().split('.').last.toUpperCase()),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        selectedProvider = value;
+                        // 모델 기본값 설정
+                        switch (value) {
+                          case AIServiceProvider.openai:
+                            modelController.text = 'gpt-4';
+                            break;
+                          case AIServiceProvider.claude:
+                            modelController.text = 'claude-3-sonnet-20240229';
+                            break;
+                        }
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'API 키:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF3C2A21),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: apiKeyController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    hintText: selectedProvider == AIServiceProvider.openai
+                        ? 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+                        : 'sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[400],
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '모델:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF3C2A21),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: modelController,
+                  decoration: InputDecoration(
+                    hintText: selectedProvider == AIServiceProvider.openai
+                        ? 'gpt-4, gpt-3.5-turbo'
+                        : 'claude-3-sonnet-20240229, claude-3-haiku-20240307',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[400],
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDD4C0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.info, size: 16, color: Color(0xFF8B5CF6)),
+                          SizedBox(width: 8),
+                          Text(
+                            'AI 기능',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF8B5CF6),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '• 자동 작업 명료화 및 분류\n• 최적의 일정 생성\n• 작업 우선순위 추천',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8B5CF6),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF8B7355),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final apiKey = apiKeyController.text.trim();
+                final model = modelController.text.trim();
+
+                if (apiKey.isNotEmpty && model.isNotEmpty) {
+                  try {
+                    final success = await aiProvider.saveConfig(
+                      provider: selectedProvider,
+                      apiKey: apiKey,
+                      model: model,
+                    );
+
+                    Navigator.of(context).pop();
+
+                    if (success) {
+                      _showSnackBar('AI 설정이 저장되었습니다.');
+                    } else {
+                      _showSnackBar('AI 설정 저장에 실패했습니다.', isError: true);
+                    }
+                  } catch (e) {
+                    _showSnackBar('AI 설정 저장 중 오류: $e', isError: true);
+                  }
+                } else {
+                  _showSnackBar('모든 필드를 입력해주세요.', isError: true);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B5CF6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// AI 기능 설명 다이얼로그
+  void _showAIFeatureDialog(String feature) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDF6E3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.auto_awesome,
+                color: Color(0xFF10B981),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              feature,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3C2A21),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (feature == '자동 명료화') ...[
+              const Text(
+                'AI가 작업을 자동으로 분석하여:',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF3C2A21),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('• 작업 제목을 명확하게 개선'),
+              const Text('• 적절한 카테고리 추천'),
+              const Text('• 우선순위 자동 설정'),
+              const Text('• 예상 소요 시간 계산'),
+              const Text('• 세부 실행 단계 제시'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '명료화 화면에서 "AI로 자동 명료화" 버튼을 클릭하여 사용할 수 있습니다.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF10B981),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ] else if (feature == '자동 일정 생성') ...[
+              const Text(
+                'AI가 일정을 최적화하여:',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF3C2A21),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('• 작업 우선순위 고려한 배치'),
+              const Text('• 개인 에너지 패턴 분석'),
+              const Text('• 적절한 휴식 시간 배치'),
+              const Text('• 작업 유형별 최적 시간대'),
+              const Text('• 연속 작업 vs 분할 작업 결정'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '계획 화면에서 AI 자동 스케줄링 기능을 사용할 수 있습니다.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF3B82F6),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF8B7355),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// AI 설정 초기화
+  Future<void> _clearAIConfig() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDF6E3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.warning,
+                color: Colors.red,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'AI 설정 초기화',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3C2A21),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'AI 설정을 초기화하면 모든 AI 기능이 비활성화됩니다.\n\n계속하시겠습니까?',
+          style: TextStyle(
+            fontSize: 14,
+            color: Color(0xFF3C2A21),
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF8B7355),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('초기화'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final aiProvider = Provider.of<AIProvider>(context, listen: false);
+        await aiProvider.clearConfig();
+        _showSnackBar('AI 설정이 초기화되었습니다.');
+      } catch (e) {
+        _showSnackBar('AI 설정 초기화 실패: $e', isError: true);
+      }
     }
   }
 
@@ -567,16 +1029,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   _buildSectionCard(
+                    title: '🤖 AI 어시스턴트',
+                    children: [
+                      Consumer<AIProvider>(
+                        builder: (context, aiProvider, child) {
+                          return Column(
+                            children: [
+                              _buildSettingTile(
+                                icon: Icons.smart_toy,
+                                title: 'AI 설정',
+                                subtitle: aiProvider.isConfigured
+                                    ? 'AI가 활성화되어 있습니다'
+                                    : 'AI API 키를 설정해주세요',
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.settings),
+                                  onPressed: _showAIConfigDialog,
+                                ),
+                                onTap: _showAIConfigDialog,
+                                iconColor: const Color(0xFF8B5CF6),
+                              ),
+                              if (aiProvider.isConfigured) ...[
+                                const Divider(),
+                                _buildSettingTile(
+                                  icon: Icons.auto_awesome,
+                                  title: '자동 명료화',
+                                  subtitle: 'AI가 작업을 자동으로 분석하고 분류합니다',
+                                  iconColor: const Color(0xFF10B981),
+                                  onTap: () => _showAIFeatureDialog('자동 명료화'),
+                                ),
+                                const Divider(),
+                                _buildSettingTile(
+                                  icon: Icons.schedule,
+                                  title: '자동 일정 생성',
+                                  subtitle: 'AI가 최적의 일정을 자동으로 생성합니다',
+                                  iconColor: const Color(0xFF3B82F6),
+                                  onTap: () => _showAIFeatureDialog('자동 일정 생성'),
+                                ),
+                                const Divider(),
+                                _buildSettingTile(
+                                  icon: Icons.logout,
+                                  title: 'AI 설정 초기화',
+                                  subtitle: 'AI 설정을 삭제하고 비활성화',
+                                  iconColor: Colors.red,
+                                  onTap: _clearAIConfig,
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
                     title: '🔒 잠금화면 설정',
                     children: [
                       _buildSettingTile(
-                        icon: Icons.lock_open,
-                        title: '잠금화면 오버레이',
-                        subtitle: _hasOverlayPermission
-                            ? '화면 켜짐 시 PDS Do-See 내용 표시'
-                            : '오버레이 권한이 필요합니다',
+                        icon: Icons.lock_clock,
+                        title: '화면 켜짐 시 잠금화면 표시',
+                        subtitle: '화면을 켤 때마다 PDS 계획 보기',
                         trailing: Switch(
-                          value: _lockScreenEnabled && _hasOverlayPermission,
+                          value: _lockScreenEnabled,
                           onChanged: _toggleLockScreen,
                           activeColor: const Color(0xFF8B7355),
                           activeTrackColor: const Color(0xFFD4A574),
@@ -585,34 +1098,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         onTap: () => _toggleLockScreen(!_lockScreenEnabled),
                       ),
-                      if (!_hasOverlayPermission) ...[
-                        const Divider(),
-                        _buildSettingTile(
-                          icon: Icons.security,
-                          title: '오버레이 권한 요청',
-                          subtitle: '다른 앱 위에 그리기 권한 설정',
-                          iconColor: Colors.orange,
-                          onTap: _requestOverlayPermission,
-                        ),
-                      ],
-                      if (_hasOverlayPermission && _lockScreenEnabled) ...[
-                        const Divider(),
-                        _buildSettingTile(
-                          icon: Icons.play_arrow,
-                          title: '오버레이 테스트',
-                          subtitle: '잠금화면 오버레이 미리보기',
-                          iconColor: Colors.green,
-                          onTap: _testOverlay,
-                        ),
-                        const Divider(),
-                        _buildSettingTile(
-                          icon: Icons.screen_lock_portrait,
-                          title: 'Screen On 이벤트 테스트',
-                          subtitle: '화면 켜짐 이벤트 수동 시뮬레이션',
-                          iconColor: Colors.blue,
-                          onTap: _testScreenOnEvent,
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 16),

@@ -1980,38 +1980,13 @@ class _TaskContentViewState extends State<_TaskContentView> {
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: const Color(0xFFDDD4C0)),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF8B7355).withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: Text(
-                                              '블록 ${index + 1}',
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                color: Color(0xFF8B7355),
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        content,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          color: Color(0xFF3C2A21),
-                                          height: 1.6,
-                                        ),
-                                      ),
-                                    ],
+                                  child: Text(
+                                    content,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFF3C2A21),
+                                      height: 1.6,
+                                    ),
                                   ),
                                 );
                               }).toList(),

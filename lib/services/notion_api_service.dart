@@ -991,159 +991,10 @@ class NotionApiService {
     }
   }
 
-  /// PDS 페이지 초기 블록 구조 생성
+  /// PDS 페이지 초기 블록 구조 생성 (빈 페이지로 생성)
   Future<void> _createInitialPDSBlocks(String pageId) async {
-    final blocks = <Map<String, dynamic>>[
-      createHeadingBlock('Plan ✍️'),
-      createHeadingBlock('Do 🏃'),
-      createHeadingBlock('See 👀'),
-    ];
-
-    await appendBlockChildren(pageId, blocks);
-  }
-
-  /// PDS 페이지에 계획 내용 추가
-  Future<void> addPlanContent(String pageId, String timeSlot, String content) async {
-    try {
-      final blocks = await getBlockChildren(pageId);
-      String? planHeadingId;
-
-      // Plan 헤딩 찾기
-      for (final block in blocks) {
-        if (block['type'] == 'heading_2') {
-          final richText = block['heading_2']?['rich_text'] as List<dynamic>? ?? [];
-          if (richText.isNotEmpty) {
-            final text = richText.first['text']?['content'] as String? ?? '';
-            if (text.startsWith('Plan')) {
-              planHeadingId = block['id'] as String;
-              break;
-            }
-          }
-        }
-      }
-
-      if (planHeadingId == null) {
-        throw Exception('Plan 헤딩을 찾을 수 없습니다.');
-      }
-
-      // Plan 헤딩 아래의 기존 블록들 조회
-      final planChildren = await getBlockChildren(planHeadingId);
-
-      // 해당 시간 슬롯의 토글 블록 찾기 또는 생성
-      String? timeToggleId;
-      for (final child in planChildren) {
-        if (child['type'] == 'toggle') {
-          final richText = child['toggle']?['rich_text'] as List<dynamic>? ?? [];
-          if (richText.isNotEmpty) {
-            final text = richText.first['text']?['content'] as String? ?? '';
-            if (text == timeSlot) {
-              timeToggleId = child['id'] as String;
-              break;
-            }
-          }
-        }
-      }
-
-      if (timeToggleId == null) {
-        // 새 시간 토글 블록 생성
-        final timeToggleBlock = createToggleBlock(timeSlot, children: [createParagraphBlock(content)]);
-        await appendBlockChildren(planHeadingId, [timeToggleBlock]);
-      } else {
-        // 기존 토글에 내용 추가
-        await appendBlockChildren(timeToggleId, [createParagraphBlock(content)]);
-      }
-    } catch (e) {
-      print('계획 내용 추가 오류: $e');
-      rethrow;
-    }
-  }
-
-  /// PDS 페이지에 실제 활동 내용 추가
-  Future<void> addDoContent(String pageId, String timeSlot, String content) async {
-    try {
-      final blocks = await getBlockChildren(pageId);
-      String? doHeadingId;
-
-      // Do 헤딩 찾기
-      for (final block in blocks) {
-        if (block['type'] == 'heading_2') {
-          final richText = block['heading_2']?['rich_text'] as List<dynamic>? ?? [];
-          if (richText.isNotEmpty) {
-            final text = richText.first['text']?['content'] as String? ?? '';
-            if (text.startsWith('Do')) {
-              doHeadingId = block['id'] as String;
-              break;
-            }
-          }
-        }
-      }
-
-      if (doHeadingId == null) {
-        throw Exception('Do 헤딩을 찾을 수 없습니다.');
-      }
-
-      // Do 헤딩 아래의 기존 블록들 조회
-      final doChildren = await getBlockChildren(doHeadingId);
-
-      // 해당 시간 슬롯의 토글 블록 찾기 또는 생성
-      String? timeToggleId;
-      for (final child in doChildren) {
-        if (child['type'] == 'toggle') {
-          final richText = child['toggle']?['rich_text'] as List<dynamic>? ?? [];
-          if (richText.isNotEmpty) {
-            final text = richText.first['text']?['content'] as String? ?? '';
-            if (text == timeSlot) {
-              timeToggleId = child['id'] as String;
-              break;
-            }
-          }
-        }
-      }
-
-      if (timeToggleId == null) {
-        // 새 시간 토글 블록 생성
-        final timeToggleBlock = createToggleBlock(timeSlot, children: [createParagraphBlock(content)]);
-        await appendBlockChildren(doHeadingId, [timeToggleBlock]);
-      } else {
-        // 기존 토글에 내용 추가
-        await appendBlockChildren(timeToggleId, [createParagraphBlock(content)]);
-      }
-    } catch (e) {
-      print('실제 활동 내용 추가 오류: $e');
-      rethrow;
-    }
-  }
-
-  /// PDS 페이지에 회고 내용 추가
-  Future<void> addSeeContent(String pageId, String content) async {
-    try {
-      final blocks = await getBlockChildren(pageId);
-      String? seeHeadingId;
-
-      // See 헤딩 찾기
-      for (final block in blocks) {
-        if (block['type'] == 'heading_2') {
-          final richText = block['heading_2']?['rich_text'] as List<dynamic>? ?? [];
-          if (richText.isNotEmpty) {
-            final text = richText.first['text']?['content'] as String? ?? '';
-            if (text.startsWith('See')) {
-              seeHeadingId = block['id'] as String;
-              break;
-            }
-          }
-        }
-      }
-
-      if (seeHeadingId == null) {
-        throw Exception('See 헤딩을 찾을 수 없습니다.');
-      }
-
-      // See 헤딩 아래에 내용 추가
-      await appendBlockChildren(seeHeadingId, [createParagraphBlock(content)]);
-    } catch (e) {
-      print('회고 내용 추가 오류: $e');
-      rethrow;
-    }
+    // 초기에는 빈 페이지로 생성하고, 나중에 syncPDSData에서 내용을 채움
+    print('PDS 페이지 초기 생성 완료 (빈 페이지)');
   }
 
   /// PDS 전체 동기화 (날짜별로 한 번에 처리)
@@ -1161,38 +1012,112 @@ class NotionApiService {
       final pageId = pdsPage['id'] as String;
       print('PDS 페이지 ID: $pageId');
 
-      // 계획 동기화
-      if (plans != null && plans.isNotEmpty) {
-        print('계획 동기화: ${plans.length}개 항목');
-        for (final entry in plans.entries) {
-          if (entry.value.trim().isNotEmpty) {
-            final timeSlot = entry.key.substring(0, 2); // "03:00" -> "03"
-            await addPlanContent(pageId, timeSlot, entry.value);
-          }
-        }
-      }
-
-      // 실제 활동 동기화
-      if (activities != null && activities.isNotEmpty) {
-        print('실제 활동 동기화: ${activities.length}개 항목');
-        for (final entry in activities.entries) {
-          if (entry.value.trim().isNotEmpty) {
-            final timeSlot = entry.key.substring(0, 2); // "03:00" -> "03"
-            await addDoContent(pageId, timeSlot, entry.value);
-          }
-        }
-      }
-
-      // 회고 동기화
-      if (seeNotes != null && seeNotes.trim().isNotEmpty) {
-        print('회고 동기화');
-        await addSeeContent(pageId, seeNotes);
-      }
+      // 페이지 내용을 완전히 재생성
+      await _recreatePDSPageContent(pageId, plans, activities, seeNotes);
 
       print('PDS 동기화 완료');
     } catch (e) {
       print('PDS 동기화 오류: $e');
       rethrow;
+    }
+  }
+
+  /// PDS 페이지 내용을 완전히 재생성
+  Future<void> _recreatePDSPageContent(String pageId, Map<String, String>? plans, Map<String, String>? activities, String? seeNotes) async {
+    try {
+      // 1. 기존 모든 블록 삭제
+      await _deleteAllPageBlocks(pageId);
+
+      // 2. 새로운 구조화된 블록들 생성
+      final allBlocks = <Map<String, dynamic>>[];
+
+      // Plan 섹션
+      allBlocks.add(createHeadingBlock('Plan ✍️'));
+      if (plans != null && plans.isNotEmpty) {
+        // 시간순 정렬
+        final sortedPlans = plans.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
+
+        for (final entry in sortedPlans) {
+          if (entry.value.trim().isNotEmpty) {
+            final timeSlot = entry.key.substring(0, 2); // "03:00" -> "03"
+            allBlocks.add(createToggleBlock(timeSlot, children: [
+              createParagraphBlock(entry.value.trim())
+            ]));
+          }
+        }
+      }
+
+      // Do 섹션
+      allBlocks.add(createHeadingBlock('Do 🏃'));
+      if (activities != null && activities.isNotEmpty) {
+        // 시간순 정렬
+        final sortedActivities = activities.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
+
+        for (final entry in sortedActivities) {
+          if (entry.value.trim().isNotEmpty) {
+            final timeSlot = entry.key.substring(0, 2); // "03:00" -> "03"
+            allBlocks.add(createToggleBlock(timeSlot, children: [
+              createParagraphBlock(entry.value.trim())
+            ]));
+          }
+        }
+      }
+
+      // See 섹션
+      allBlocks.add(createHeadingBlock('See 👀'));
+      if (seeNotes != null && seeNotes.trim().isNotEmpty) {
+        allBlocks.add(createParagraphBlock(seeNotes.trim()));
+      }
+
+      // 3. 모든 블록을 한 번에 추가
+      if (allBlocks.isNotEmpty) {
+        await appendBlockChildren(pageId, allBlocks);
+      }
+
+      print('PDS 페이지 내용 재생성 완료: ${allBlocks.length}개 블록');
+    } catch (e) {
+      print('PDS 페이지 내용 재생성 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 페이지의 모든 블록 삭제
+  Future<void> _deleteAllPageBlocks(String pageId) async {
+    try {
+      final blocks = await getBlockChildren(pageId);
+
+      for (final block in blocks) {
+        final blockId = block['id'] as String;
+        await _deleteBlock(blockId);
+      }
+
+      print('기존 블록 ${blocks.length}개 삭제 완료');
+    } catch (e) {
+      print('블록 삭제 오류: $e');
+      // 블록 삭제 실패는 무시하고 계속 진행
+    }
+  }
+
+  /// 개별 블록 삭제
+  Future<void> _deleteBlock(String blockId) async {
+    try {
+      final headers = await _getHeaders();
+      final url = '$baseUrl/blocks/$blockId';
+
+      final body = jsonEncode(<String, dynamic>{
+        'archived': true,
+      });
+
+      await http.patch(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
+    } catch (e) {
+      print('블록 $blockId 삭제 실패: $e');
+      // 개별 블록 삭제 실패는 무시
     }
   }
 }

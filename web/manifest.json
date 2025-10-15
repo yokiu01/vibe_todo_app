@@ -1,11 +1,11 @@
 {
-    "name": "vibe_todo_app",
-    "short_name": "vibe_todo_app",
+    "name": "포커스 데이즈",
+    "short_name": "포커스 데이즈",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#2D5A27",
     "theme_color": "#2D5A27",
-    "description": "A new Flutter project.",
+    "description": "포커스 데이즈 - 개인 생산성 관리 앱",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

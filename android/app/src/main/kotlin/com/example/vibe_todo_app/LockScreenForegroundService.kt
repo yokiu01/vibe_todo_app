@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import android.app.AlarmManager
+import android.os.SystemClock
 
 class LockScreenForegroundService : Service() {
     private var screenOnReceiver: ScreenOnReceiver? = null
@@ -26,10 +28,17 @@ class LockScreenForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("LockScreenForegroundService", "onStartCommand called, flags: $flags, startId: $startId")
+
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
-        
-        Log.d("LockScreenForegroundService", "Service started")
+
+        // 재등록 확인
+        if (screenOnReceiver == null) {
+            setupScreenReceiver()
+        }
+
+        Log.d("LockScreenForegroundService", "Service started with START_STICKY")
         return START_STICKY // 서비스가 종료되어도 자동 재시작
     }
 
@@ -85,8 +94,31 @@ class LockScreenForegroundService : Service() {
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d("LockScreenForegroundService", "Task removed - Restarting service")
+
+        // 서비스 재시작
+        val restartServiceIntent = Intent(applicationContext, LockScreenForegroundService::class.java)
+        val pendingIntent = PendingIntent.getService(
+            applicationContext,
+            1,
+            restartServiceIntent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        alarmManager.set(
+            android.app.AlarmManager.ELAPSED_REALTIME,
+            android.os.SystemClock.elapsedRealtime() + 1000,
+            pendingIntent
+        )
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        Log.d("LockScreenForegroundService", "Service destroyed")
+
         try {
             screenOnReceiver?.let {
                 unregisterReceiver(it)
@@ -94,6 +126,19 @@ class LockScreenForegroundService : Service() {
             }
         } catch (e: Exception) {
             Log.e("LockScreenForegroundService", "Error unregistering screen receiver: $e")
+        }
+
+        // 서비스 재시작
+        try {
+            val restartServiceIntent = Intent(applicationContext, LockScreenForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                applicationContext.startForegroundService(restartServiceIntent)
+            } else {
+                applicationContext.startService(restartServiceIntent)
+            }
+            Log.d("LockScreenForegroundService", "Service restart scheduled")
+        } catch (e: Exception) {
+            Log.e("LockScreenForegroundService", "Error restarting service: $e")
         }
     }
 
@@ -117,6 +162,9 @@ class LockScreenForegroundService : Service() {
         }
     }
 }
+
+
+
 
 
 
