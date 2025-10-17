@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/notion_task.dart';
 import '../services/notion_auth_service.dart';
 import '../utils/helpers.dart';
+import '../providers/onboarding_provider.dart';
+import '../widgets/inbox_onboarding_overlay.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -13,6 +16,7 @@ class InboxScreen extends StatefulWidget {
 class _InboxScreenState extends State<InboxScreen> {
   final TextEditingController _textController = TextEditingController();
   final NotionAuthService _authService = NotionAuthService();
+  final GlobalKey<_InboxOnboardingOverlayState> _onboardingKey = GlobalKey();
   bool _isLoadingNotion = false;
   bool _isAdding = false;
   List<NotionTask> _notionTasks = [];
@@ -143,10 +147,17 @@ class _InboxScreenState extends State<InboxScreen> {
     try {
       await _authService.apiService!.createTodo(_textController.text.trim());
       _textController.clear();
-      
+
       // 목록 새로고침
       _loadNotionTasks();
-      
+
+      // 온보딩 중이면 다음 단계로
+      final onboardingProvider = context.read<OnboardingProvider>();
+      if (!onboardingProvider.isOnboardingCompleted &&
+          onboardingProvider.currentPhase == OnboardingPhase.collection) {
+        _onboardingKey.currentState?.onItemAdded();
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -173,23 +184,40 @@ class _InboxScreenState extends State<InboxScreen> {
     }
   }
 
+  /// 명료화 탭으로 이동 (온보딩용)
+  void _navigateToClarification() {
+    // MainNavigation의 탭 변경은 상위 위젯에서 처리
+    // 여기서는 온보딩 상태만 업데이트
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadNotionTasks,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              children: [
-                _buildHeader(),
-                _buildInputSection(),
-                _buildRecentItems(),
-              ],
+        child: Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _loadNotionTasks,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    _buildInputSection(),
+                    _buildRecentItems(),
+                  ],
+                ),
+              ),
             ),
-          ),
+            // 온보딩 오버레이
+            InboxOnboardingOverlay(
+              key: _onboardingKey,
+              onAddItem: () {},
+              onClarify: _navigateToClarification,
+              hasItems: _notionTasks.isNotEmpty,
+            ),
+          ],
         ),
       ),
     );

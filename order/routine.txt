@@ -1,0 +1,111 @@
+1. 기존의 탄탄한 구조를 바탕으로, GTD와 PDS 방법론을 보완하는 루틴 기능을 자연스럽게 통합하는 방안을 제안합니다.
+
+Routine 데이터베이스 주소: https://www.notion.so/28d9f5e4a811806d9f2cdfa30eb470d3
+
+
+| 타입 (Type) | 속성 (Property) | 내용 |
+| :--- | :--- |
+| `Multi-select` | 반복 주기 | (`매일`, `주중`, `주말`, `월`, `화`, `수`...)  |
+| `Text` or `Date` | 루틴 수행 시간 | (예: `08:00`) - PDS PLAN 기능 연동 가능 |
+| `Select` | 루틴 활성화 상태 | (`Active`, `Paused`) |
+| `생성일시` | 생성일 | 마지막으로 할 일이 생성된 날짜 (중복 생성 방지용) |
+
+이 데이터베이스는 한번 설정해두면 매일 자동으로 할 일을 생성해주는 역할을 합니다.
+
+
+
+-----
+
+### 2\. 📱 UI/UX 통합 방안
+
+사용자가 루틴을 설정하고, 매일 생성된 루틴을 확인할 수 있도록 기존 화면에 기능을 배치합니다.
+
+#### **A. 루틴 설정: `PlanScreen` (계획 화면)**
+
+계획 화면에 **'루틴 관리' 탭을 추가**하여 기존의 할 일, PDS 계획과 분리하여 관리합니다.
+
+  * **위치**: `plan_screen.dart`의 `TabBar`
+  * **기능**:
+      * 새로운 루틴 생성, 수정, 삭제 (CRUD)
+      * 루틴 활성화/비활성화(On/Off) 토글
+      * 반복 요일 및 시간 설정
+
+**수정 제안 (`plan_screen.dart`):**
+
+```dart
+PlanScreen
+├── Header (제목 + 설명)
+├── TabBar (4개 탭) // 탭 추가
+│   ├── Task Management
+│   ├── PDS Plan
+│   ├── PDS Do/See
+│   └── **Routine Management (루틴 관리)** // 신규 탭
+└── TabBarView
+    ├── TaskManagementScreen
+    ├── PDSPlanScreen
+    ├── PDSDoSeeScreen
+    └── **RoutineManagementScreen()** // 신규 화면
+```
+
+#### **B. 루틴 실행: `HomeScreen` (홈 화면)**
+
+매일 생성된 루틴은 다른 할 일과 마찬가지로 **홈 화면의 'Today' 탭에 표시**되어 사용자가 바로 확인하고 실행할 수 있도록 합니다.
+
+  * **위치**: `home_screen.dart`의 `_buildTodayPage()`
+  * **기능**:
+      * 오늘 날짜에 해당하는 활성화된 루틴들이 일반 할 일과 함께 목록에 나타남
+      * 루틴에서 생성된 할 일임을 구분할 수 있는 아이콘이나 태그 표시
+      * 일반 할 일처럼 완료/미완료 처리 가능
+
+-----
+
+### 3\. 🔧 상태 관리 및 로직 추가
+
+새로운 기능을 위해 상태 관리자와 핵심 로직을 추가합니다.
+
+#### **A. `RoutineProvider` 추가**
+
+루틴 데이터와 비즈니스 로직을 전담할 `RoutineProvider`를 새로 만듭니다.
+
+  * **위치**: `main.dart`의 `MultiProvider`
+  * **역할**:
+      * Notion API를 통해 `Routines` 데이터베이스의 목록을 가져오고 관리
+      * 매일 자정 또는 앱 실행 시, 오늘 실행해야 할 루틴을 확인
+      * 확인된 루틴을 기반으로 Notion `Tasks` 데이터베이스에 새로운 할 일을 생성
+
+**수정 제안 (`main.dart`):**
+
+```dart
+MultiProvider (상태 관리)
+├── ItemProvider
+├── DailyPlanProvider  
+├── ReviewProvider
+├── PDSDiaryProvider
+├── **RoutineProvider** // 신규 Provider 추가
+└── AIProvider
+```
+
+#### **B. 핵심 로직: 루틴 기반 할 일 자동 생성**
+
+`RoutineProvider` 내부에 다음과 같은 로직을 구현합니다.
+
+1.  **트리거**: 앱이 시작될 때 또는 특정 시간(예: 매일 자정)이 되었을 때 로직을 실행합니다.
+2.  **조회**: Notion의 `Routines` 데이터베이스에서 `Status`가 `Active`인 모든 항목을 가져옵니다.
+3.  **조건 확인**: 각 루틴의 `Frequency`(반복 주기)가 오늘 요일과 일치하는지, 그리고 `Last Generated` 날짜가 오늘 이전인지 확인하여 중복 생성을 방지합니다.
+4.  **생성**: 조건에 맞는 루틴이 있다면, Notion의 `Tasks` 데이터베이스에 새로운 항목을 생성합니다. 이때, "📅[루틴] 아침 명상"과 같이 제목에 프리픽스를 붙여 일반 할 일과 구분할 수 있습니다.
+5.  **업데이트**: 할 일 생성이 완료되면, `Routines` 데이터베이스의 `Last Generated` 필드를 오늘 날짜로 업데이트합니다.
+
+-----
+
+### 📊 요약: 주요 변경 사항
+
+| 구분 | 파일/요소 | 변경 내용 |
+| :--- | :--- | :--- |
+| **데이터** | Notion | **`Routines` 데이터베이스 신규 생성** |
+| **UI/UX** | `plan_screen.dart` | `TabBar`에 **'루틴 관리' 탭 추가** 및 관련 화면(`RoutineManagementScreen`) 연결 |
+| | `home_screen.dart` | 'Today' 탭에 루틴에서 자동 생성된 할 일이 표시되도록 쿼리 수정 |
+| **상태 관리** | `main.dart` | `MultiProvider`에 **`RoutineProvider` 추가** |
+| **로직** | `RoutineProvider` (신규) | 루틴 조회, 조건 확인, 할 일 자동 생성 및 업데이트 로직 구현 |
+
+이와 같이 구조를 확장하면, 기존 앱의 안정성을 해치지 않으면서도 강력한 루틴 관리 기능을 체계적으로 추가할 수 있습니다.
+

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum AIServiceProvider {
   openai,
   claude,
+  perplexity,
 }
 
 class AIConfig {

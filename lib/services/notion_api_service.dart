@@ -13,6 +13,7 @@ class NotionApiService {
   static const String GOAL_DB_ID = '1159f5e4a81180d092add53ae9df7f05';
   static const String AREA_RESOURCE_DB_ID = '1159f5e4a81180d1ab17fa79bb0cf0f4'; // 영역·자원 데이터베이스
   static const String PDS_DB_ID = '27b9f5e4a811805c89cff86146f4d12f'; // PDS 데이터베이스
+  static const String ROUTINE_DB_ID = '28d9f5e4a811806d9f2cdfa30eb470d3'; // Routine 데이터베이스
   
   static const String _apiKeyKey = 'notion_api_key';
   
@@ -850,6 +851,24 @@ class NotionApiService {
     }
   }
 
+  /// 특정 프로젝트와 관련된 목표 조회
+  Future<List<Map<String, dynamic>>> getRelatedGoalsForProject(String projectId) async {
+    try {
+      final filter = {
+        'property': '프로젝트 데이터베이스',
+        'relation': {
+          'contains': projectId,
+        }
+      };
+
+      return await queryDatabase(GOAL_DB_ID, filter);
+    } catch (e) {
+      print('관련 목표 조회 오류: $e');
+      return [];
+    }
+  }
+
+
   /// 위치 기반 할일 조회 (위치 기반 알림용)
   Future<List<Map<String, dynamic>>> getTasksForLocation(String locationName) async {
     try {
@@ -1118,6 +1137,185 @@ class NotionApiService {
     } catch (e) {
       print('블록 $blockId 삭제 실패: $e');
       // 개별 블록 삭제 실패는 무시
+    }
+  }
+
+  /// 블록 업데이트 (공개 메서드)
+  Future<Map<String, dynamic>> updateBlock(String blockId, Map<String, dynamic> blockData) async {
+    try {
+      final headers = await _getHeaders();
+      final url = '$baseUrl/blocks/$blockId';
+
+      final response = await http.patch(
+        Uri.parse(url),
+        headers: headers,
+        body: jsonEncode(blockData),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+        throw Exception('블록 업데이트 실패 (${response.statusCode}): ${errorBody['message'] ?? response.body}');
+      }
+    } catch (e) {
+      print('블록 업데이트 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 블록 삭제 (공개 메서드)
+  Future<void> deleteBlock(String blockId) async {
+    await _deleteBlock(blockId);
+  }
+
+  // ==================== Routine 관련 메서드 ====================
+
+  /// 모든 루틴 조회
+  Future<List<dynamic>> fetchRoutines() async {
+    try {
+      final results = await queryDatabase(ROUTINE_DB_ID, null);
+
+      // Import Routine model
+      return results.map((notionPage) {
+        try {
+          // Routine 모델로 변환하는 로직은 RoutineProvider에서 처리
+          return notionPage;
+        } catch (e) {
+          print('루틴 파싱 오류: $e');
+          return null;
+        }
+      }).where((r) => r != null).toList();
+    } catch (e) {
+      print('루틴 조회 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 루틴 생성
+  Future<dynamic> createRoutine(dynamic routine) async {
+    try {
+      // Routine 객체의 toNotionProperties 메서드를 사용
+      final properties = routine.toNotionProperties() as Map<String, dynamic>;
+      final createdPage = await createPage(ROUTINE_DB_ID, properties);
+      return createdPage;
+    } catch (e) {
+      print('루틴 생성 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 루틴 업데이트
+  Future<bool> updateRoutine(String routineId, dynamic routine) async {
+    try {
+      final properties = routine.toNotionProperties() as Map<String, dynamic>;
+      await updatePage(routineId, properties);
+      return true;
+    } catch (e) {
+      print('루틴 업데이트 오류: $e');
+      return false;
+    }
+  }
+
+  /// 루틴 삭제 (아카이브)
+  Future<bool> deleteRoutine(String routineId) async {
+    try {
+      await deletePage(routineId);
+      return true;
+    } catch (e) {
+      print('루틴 삭제 오류: $e');
+      return false;
+    }
+  }
+
+  /// 루틴에서 할 일 생성
+  Future<String?> createTaskFromRoutine(Map<String, dynamic> taskData) async {
+    try {
+      final properties = <String, dynamic>{
+        '이름': {
+          'title': [
+            {
+              'text': {'content': taskData['title'] ?? ''}
+            }
+          ]
+        },
+      };
+
+      // Description
+      if (taskData['description'] != null && taskData['description'].toString().isNotEmpty) {
+        properties['description'] = {
+          'rich_text': [
+            {
+              'text': {'content': taskData['description']}
+            }
+          ]
+        };
+      }
+
+      // Category (if exists in TODO database)
+      if (taskData['category'] != null) {
+        properties['분류'] = {
+          'select': {'name': taskData['category']}
+        };
+      }
+
+      // Due date
+      if (taskData['due_date'] != null) {
+        properties['날짜'] = {
+          'date': {'start': taskData['due_date']}
+        };
+      }
+
+      // Scheduled time (if exists in TODO database)
+      if (taskData['scheduled_time'] != null) {
+        properties['시간'] = {
+          'rich_text': [
+            {
+              'text': {'content': taskData['scheduled_time']}
+            }
+          ]
+        };
+      }
+
+      // Status
+      if (taskData['status'] != null) {
+        properties['상태'] = {
+          'select': {'name': taskData['status']}
+        };
+      }
+
+      // Mark as routine-generated (태그 사용)
+      if (taskData['is_routine'] == true) {
+        properties['태그'] = {
+          'multi_select': [
+            {'name': '루틴'}
+          ]
+        };
+      }
+
+      final createdPage = await createPage(TODO_DB_ID, properties);
+      return createdPage['id'] as String?;
+    } catch (e) {
+      print('루틴 기반 할 일 생성 오류: $e');
+      return null;
+    }
+  }
+
+  /// 활성화된 루틴만 조회
+  Future<List<dynamic>> fetchActiveRoutines() async {
+    try {
+      final filter = {
+        'property': '루틴 활성화 상태',
+        'select': {
+          'equals': 'Active',
+        }
+      };
+
+      final results = await queryDatabase(ROUTINE_DB_ID, filter);
+      return results;
+    } catch (e) {
+      print('활성 루틴 조회 오류: $e');
+      rethrow;
     }
   }
 }

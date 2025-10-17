@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/notion_task.dart';
 import '../services/notion_auth_service.dart';
 import '../utils/helpers.dart';
@@ -6,6 +7,9 @@ import '../utils/app_colors.dart';
 import '../utils/app_text_styles.dart';
 import '../widgets/interactive_button.dart';
 import '../widgets/loading_skeleton.dart';
+import '../providers/onboarding_provider.dart';
+import '../widgets/inbox_onboarding_overlay.dart';
+import '../widgets/notion_block_editor.dart';
 
 class CollectionClarificationScreen extends StatefulWidget {
   const CollectionClarificationScreen({super.key});
@@ -17,6 +21,7 @@ class CollectionClarificationScreen extends StatefulWidget {
 class _CollectionClarificationScreenState extends State<CollectionClarificationScreen> {
   final TextEditingController _textController = TextEditingController();
   final NotionAuthService _authService = NotionAuthService();
+  final GlobalKey<InboxOnboardingOverlayState> _onboardingKey = GlobalKey();
   bool _isLoadingNotion = false;
   bool _isAdding = false;
   List<NotionTask> _notionTasks = [];
@@ -197,6 +202,13 @@ class _CollectionClarificationScreenState extends State<CollectionClarificationS
       // 목록 새로고침
       _loadData();
 
+      // 온보딩 중이면 다음 단계로
+      final onboardingProvider = context.read<OnboardingProvider>();
+      if (!onboardingProvider.isOnboardingCompleted &&
+          onboardingProvider.currentPhase == OnboardingPhase.collection) {
+        _onboardingKey.currentState?.onItemAdded();
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -220,6 +232,314 @@ class _CollectionClarificationScreenState extends State<CollectionClarificationS
           _isAdding = false;
         });
       }
+    }
+  }
+
+  /// 항목 옵션 다이얼로그 (수정/삭제)
+  void _showItemOptionsDialog(NotionTask item) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.settings, color: AppColors.accentOrange, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '항목 관리',
+                      style: AppTextStyles.h2,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.title.length > 30 ? '${item.title.substring(0, 30)}...' : item.title,
+                style: AppTextStyles.caption,
+              ),
+              const SizedBox(height: 24),
+
+              // 수정 버튼
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _showEditItemDialog(item);
+                },
+                icon: const Icon(Icons.edit),
+                label: const Text('수정하기'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // 삭제 버튼
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _confirmDeleteItem(item);
+                },
+                icon: const Icon(Icons.delete),
+                label: const Text('삭제하기'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // 명료화 계속하기 버튼
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  // 명료화 다이얼로그는 기존 로직 유지
+                },
+                icon: const Icon(Icons.arrow_forward),
+                label: const Text('명료화 계속하기'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accentOrange,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 항목 수정 다이얼로그 (Notion 블록 기반 편집기)
+  void _showEditItemDialog(NotionTask item) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.accentBlue,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.edit, color: Colors.white, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.title.length > 30
+                            ? '${item.title.substring(0, 30)}...'
+                            : item.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Notion Block Editor
+              Expanded(
+                child: NotionBlockEditor(
+                  pageId: item.id,
+                  notionService: _authService.apiService!,
+                ),
+              ),
+
+              // Footer with save button
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  border: Border(
+                    top: BorderSide(color: AppColors.borderColor),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('취소'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _loadData(); // Reload data after editing
+                          _showSuccessSnackBar('변경사항이 저장되었습니다');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accentBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('완료'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 항목 수정 실행
+  Future<void> _updateItem(NotionTask item, String newTitle, String newDescription) async {
+    try {
+      setState(() {
+        _isLoadingNotion = true;
+      });
+
+      final updateProperties = <String, dynamic>{
+        'Name': {
+          'title': [
+            {
+              'text': {
+                'content': newTitle,
+              }
+            }
+          ]
+        },
+      };
+
+      if (newDescription.isNotEmpty) {
+        updateProperties['상세설명'] = {
+          'rich_text': [
+            {
+              'text': {
+                'content': newDescription,
+              }
+            }
+          ]
+        };
+      }
+
+      await _authService.apiService!.updatePage(item.id, updateProperties);
+      _loadData();
+      _showSuccessSnackBar('항목이 수정되었습니다');
+    } catch (e) {
+      setState(() {
+        _isLoadingNotion = false;
+      });
+      _showErrorSnackBar('수정 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  /// 삭제 확인 다이얼로그
+  void _confirmDeleteItem(NotionTask item) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red, size: 24),
+            const SizedBox(width: 12),
+            const Text('삭제 확인'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('정말로 이 항목을 삭제하시겠습니까?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.gray100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                item.title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '삭제된 항목은 복구할 수 없습니다.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.red[700],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteItem(item);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 항목 삭제 실행
+  Future<void> _deleteItem(NotionTask item) async {
+    try {
+      setState(() {
+        _isLoadingNotion = true;
+      });
+
+      await _authService.apiService!.deletePage(item.id);
+      _loadData();
+      _showSuccessSnackBar('항목이 삭제되었습니다');
+    } catch (e) {
+      setState(() {
+        _isLoadingNotion = false;
+      });
+      _showErrorSnackBar('삭제 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -1181,19 +1501,33 @@ class _CollectionClarificationScreenState extends State<CollectionClarificationS
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadData,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              children: [
-                _buildHeader(),
-                _buildInputSection(),
-                const SizedBox(height: 32),
-                _buildClarificationSection(),
-              ],
+        child: Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _loadData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    _buildInputSection(),
+                    const SizedBox(height: 32),
+                    _buildClarificationSection(),
+                  ],
+                ),
+              ),
             ),
-          ),
+            // 온보딩 오버레이
+            InboxOnboardingOverlay(
+              key: _onboardingKey,
+              onAddItem: () {},
+              onClarify: () {
+                // 명료화는 같은 화면에 있으므로 스크롤만 하거나 상태 업데이트
+                context.read<OnboardingProvider>().nextPhase();
+              },
+              hasItems: _notionTasks.isNotEmpty,
+            ),
+          ],
         ),
       ),
     );
@@ -1240,7 +1574,7 @@ class _CollectionClarificationScreenState extends State<CollectionClarificationS
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '💡 수집·명료화',
+                  '수집·명료화',
                   style: AppTextStyles.h1,
                 ),
                 Text(
@@ -1561,8 +1895,7 @@ class _CollectionClarificationScreenState extends State<CollectionClarificationS
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () {
-              // Add subtle haptic feedback on tap
-              // HapticFeedback.lightImpact();
+              _showItemOptionsDialog(item);
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),

@@ -8,6 +8,7 @@ import '../services/time_notification_service.dart';
 import '../models/location.dart';
 import '../providers/ai_provider.dart';
 import '../services/ai_service.dart';
+import '../providers/onboarding_provider.dart';
 import 'location_list_screen.dart';
 import 'location_demo_screen.dart';
 
@@ -557,6 +558,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           case AIServiceProvider.claude:
                             modelController.text = 'claude-3-sonnet-20240229';
                             break;
+                          case AIServiceProvider.perplexity:
+                            modelController.text = 'llama-3.1-sonar-large-128k-online';
+                            break;
                         }
                       });
                     }
@@ -578,7 +582,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: InputDecoration(
                     hintText: selectedProvider == AIServiceProvider.openai
                         ? 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-                        : 'sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+                        : selectedProvider == AIServiceProvider.claude
+                            ? 'sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+                            : 'pplx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
                     hintStyle: TextStyle(
                       color: Colors.grey[400],
                     ),
@@ -614,7 +620,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: InputDecoration(
                     hintText: selectedProvider == AIServiceProvider.openai
                         ? 'gpt-4, gpt-3.5-turbo'
-                        : 'claude-3-sonnet-20240229, claude-3-haiku-20240307',
+                        : selectedProvider == AIServiceProvider.claude
+                            ? 'claude-3-sonnet-20240229, claude-3-haiku-20240307'
+                            : 'llama-3.1-sonar-large-128k-online, llama-3.1-sonar-small-128k-online',
                     hintStyle: TextStyle(
                       color: Colors.grey[400],
                     ),
@@ -921,6 +929,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _resetOnboarding() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDF6E3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.replay,
+                color: Color(0xFF3B82F6),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              '온보딩 다시 보기',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3C2A21),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          '처음 사용자처럼 앱 사용법을 다시 배우시겠습니까?\n\n온보딩 튜토리얼이 처음부터 시작됩니다.',
+          style: TextStyle(
+            fontSize: 14,
+            color: Color(0xFF3C2A21),
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF8B7355),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('다시 보기'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final onboardingProvider = Provider.of<OnboardingProvider>(context, listen: false);
+        await onboardingProvider.resetOnboarding();
+        _showSnackBar('온보딩을 다시 시작합니다. 앱이 재시작됩니다.');
+
+        // Give user time to read the message, then restart
+        Future.delayed(const Duration(seconds: 2), () {
+          // The app will automatically show onboarding on next build
+          // Force a rebuild by navigating to root
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        });
+      } catch (e) {
+        _showSnackBar('온보딩 재시작 실패: $e', isError: true);
+      }
+    }
+  }
+
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1189,6 +1281,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         title: '사용법 안내',
                         subtitle: 'PDS 방법론 및 앱 사용법',
                         onTap: () => _showHelpDialog(),
+                      ),
+                      const Divider(),
+                      _buildSettingTile(
+                        icon: Icons.replay,
+                        title: '온보딩 다시 보기',
+                        subtitle: '앱 사용법을 다시 배우고 싶으신가요?',
+                        iconColor: const Color(0xFF3B82F6),
+                        onTap: _resetOnboarding,
                       ),
                     ],
                   ),

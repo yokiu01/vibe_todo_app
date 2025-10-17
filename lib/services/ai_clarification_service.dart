@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'ai_service.dart';
 import 'openai_service.dart';
+import 'perplexity_service.dart';
 
 class AIClarificationService {
   static AIService? _aiService;
@@ -16,6 +17,12 @@ class AIClarificationService {
           );
           break;
         case AIServiceProvider.claude:
+          break;
+        case AIServiceProvider.perplexity:
+          _aiService = PerplexityService(
+            apiKey: config.apiKey,
+            model: config.model.isNotEmpty ? config.model : 'llama-3.1-sonar-large-128k-online',
+          );
           break;
       }
     }

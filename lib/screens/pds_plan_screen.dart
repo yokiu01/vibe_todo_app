@@ -16,7 +16,8 @@ class PDSPlanScreen extends StatefulWidget {
   State<PDSPlanScreen> createState() => _PDSPlanScreenState();
 }
 
-class _PDSPlanScreenState extends State<PDSPlanScreen> {
+class _PDSPlanScreenState extends State<PDSPlanScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   DateTime _selectedDate = DateTime.now();
   Map<String, String> _freeformPlans = {};
   Map<String, TextEditingController> _planControllers = {};
@@ -31,6 +32,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _initializeControllers();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PDSDiaryProvider>().loadPDSPlans();
@@ -42,6 +44,7 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _planControllers.values.forEach((controller) => controller.dispose());
     _focusNodes.values.forEach((focusNode) => focusNode.dispose());
     _debounceTimer?.cancel();
@@ -186,15 +189,29 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         child: Column(
           children: [
             _buildHeader(),
+            _buildTabBar(),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  context.read<PDSDiaryProvider>().loadPDSPlans();
-                  context.read<ItemProvider>().loadItems();
-                  _loadCurrentPlan();
-                  _loadNotionTasks();
-                },
-                child: _buildPlanLayout(),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // 계획 탭
+                  RefreshIndicator(
+                    onRefresh: () async {
+                      context.read<PDSDiaryProvider>().loadPDSPlans();
+                      context.read<ItemProvider>().loadItems();
+                      _loadCurrentPlan();
+                      _loadNotionTasks();
+                    },
+                    child: _buildPlanLayout(),
+                  ),
+                  // 루틴 탭
+                  RefreshIndicator(
+                    onRefresh: () async {
+                      // 루틴 데이터 새로고침
+                    },
+                    child: _buildRoutineLayout(),
+                  ),
+                ],
               ),
             ),
           ],
@@ -205,53 +222,87 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F1E8), // AppColors.cardBackground
         border: Border(
-          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+          bottom: BorderSide(color: const Color(0xFFE2E8F0)), // AppColors.borderColor
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.access_time,
-                color: Color(0xFFFF4757),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'PLAN',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1F2937),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF8B7355).withOpacity(0.1), // AppColors.primaryBrown
+                      const Color(0xFF9C8B73).withOpacity(0.1), // AppColors.primaryBrownLight
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.access_time,
+                  color: const Color(0xFF8B7355), // AppColors.primaryBrown
+                  size: 24,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '계획',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF3C2A21), // AppColors.textPrimary
+                      ),
+                    ),
+                    Text(
+                      '일일 계획과 루틴 관리',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: const Color(0xFF6B7280), // AppColors.textSecondary
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               // Notion 동기화 버튼
               GestureDetector(
                 onTap: _syncToNotion,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF3B82F6).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.sync,
-                        size: 14,
+                        size: 16,
                         color: const Color(0xFF3B82F6),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       Text(
                         'Notion',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           color: const Color(0xFF3B82F6),
                           fontWeight: FontWeight.w500,
                         ),
@@ -262,26 +313,91 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          // 날짜 선택기
           GestureDetector(
             onTap: _showDatePicker,
-            child: Row(
-              children: [
-                Text(
-                  DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 16,
+                    color: const Color(0xFF6B7280),
                   ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.calendar_today,
-                  size: 14,
-                  color: Color(0xFF6B7280),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    DateFormat('M월 d일 (E)', 'ko').format(_selectedDate),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      color: const Color(0xFFF5F1E8), // AppColors.cardBackground
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: TabBar(
+        controller: _tabController,
+        isScrollable: false,
+        indicator: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF8B7355), // AppColors.primaryBrown
+              const Color(0xFF9C8B73), // AppColors.primaryBrownLight
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF8B7355).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelColor: Colors.white,
+        unselectedLabelColor: const Color(0xFF8B7355), // AppColors.primaryBrown
+        labelStyle: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        labelPadding: EdgeInsets.zero,
+        tabs: const [
+          Tab(
+            child: SizedBox.expand(
+              child: Center(
+                child: Text('계획'),
+              ),
+            ),
+          ),
+          Tab(
+            child: SizedBox.expand(
+              child: Center(
+                child: Text('루틴'),
+              ),
             ),
           ),
         ],
@@ -1347,6 +1463,232 @@ class _PDSPlanScreenState extends State<PDSPlanScreen> {
         );
       }
     }
+  }
+
+  /// 루틴 레이아웃
+  Widget _buildRoutineLayout() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildRoutineSection(
+          title: '🌅 아침 루틴',
+          routines: [
+            {'time': '06:00', 'name': '기상', 'icon': Icons.wb_sunny},
+            {'time': '06:30', 'name': '운동', 'icon': Icons.fitness_center},
+            {'time': '07:00', 'name': '아침 식사', 'icon': Icons.restaurant},
+            {'time': '07:30', 'name': '샤워', 'icon': Icons.shower},
+          ],
+        ),
+        const SizedBox(height: 24),
+        _buildRoutineSection(
+          title: '🌆 저녁 루틴',
+          routines: [
+            {'time': '18:00', 'name': '저녁 식사', 'icon': Icons.dinner_dining},
+            {'time': '19:00', 'name': '독서', 'icon': Icons.book},
+            {'time': '20:00', 'name': '명상', 'icon': Icons.self_improvement},
+            {'time': '21:00', 'name': '일기 작성', 'icon': Icons.edit_note},
+          ],
+        ),
+        const SizedBox(height: 24),
+        _buildRoutineSection(
+          title: '💤 취침 루틴',
+          routines: [
+            {'time': '22:00', 'name': '스트레칭', 'icon': Icons.accessibility_new},
+            {'time': '22:30', 'name': '내일 계획', 'icon': Icons.calendar_today},
+            {'time': '23:00', 'name': '취침', 'icon': Icons.bedtime},
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildAddRoutineButton(),
+      ],
+    );
+  }
+
+  Widget _buildRoutineSection({
+    required String title,
+    required List<Map<String, dynamic>> routines,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDF6E3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDD4C0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3C2A21),
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFDDD4C0)),
+          ...routines.map((routine) => _buildRoutineItem(routine)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoutineItem(Map<String, dynamic> routine) {
+    return InkWell(
+      onTap: () {
+        // 루틴 수정 다이얼로그
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Color(0xFFDDD4C0), width: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B7355).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                routine['icon'] as IconData,
+                color: const Color(0xFF8B7355),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    routine['name'] as String,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF3C2A21),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    routine['time'] as String,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF9C8B73),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Checkbox(
+              value: false,
+              onChanged: (value) {
+                // 완료 상태 토글
+              },
+              activeColor: const Color(0xFF8B7355),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddRoutineButton() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: OutlinedButton.icon(
+        onPressed: () {
+          // 새 루틴 추가 다이얼로그
+          _showAddRoutineDialog();
+        },
+        icon: const Icon(Icons.add, color: Color(0xFF8B7355)),
+        label: const Text(
+          '새 루틴 추가',
+          style: TextStyle(color: Color(0xFF8B7355)),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFF8B7355)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAddRoutineDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDF6E3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          '새 루틴 추가',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF3C2A21),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: InputDecoration(
+                labelText: '루틴 이름',
+                hintText: '예: 아침 운동',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              decoration: InputDecoration(
+                labelText: '시간',
+                hintText: '예: 06:00',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              '취소',
+              style: TextStyle(color: Color(0xFF8B7355)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // 루틴 저장 로직
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B7355),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
   }
 
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'task_management_screen.dart';
 import 'pds_plan_screen.dart';
 import 'pds_do_see_screen.dart';
+import 'routine/routine_management_screen.dart';
 import '../utils/app_colors.dart';
 
 class PlanScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -42,6 +43,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
                   TaskManagementScreen(),
                   PDSPlanScreen(),
                   PDSDoSeeScreen(),
+                  RoutineManagementScreen(),
                 ],
               ),
             ),
@@ -92,7 +94,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '📅 계획',
+                  '계획',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -177,6 +179,17 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
               child: Center(
                 child: Text(
                   'DO-SEE',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ),
+          ),
+          Tab(
+            child: SizedBox.expand(
+              child: Center(
+                child: Text(
+                  '루틴',
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),

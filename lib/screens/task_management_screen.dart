@@ -159,22 +159,37 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
     try {
       print('진행 중인 할일 로드 시작');
-      
+
       // 모든 할일을 가져온 후 클라이언트에서 필터링
       final allItems = await _authService.apiService!.queryDatabase(
         '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
         null
       );
       print('전체 할일: ${allItems.length}개 로드됨');
-      
-      // 진행 중인 할일 필터링 (완료되지 않은 모든 할일)
+
+      // 진행 중인 할일 필터링 (완료되지 않고, 명료화='다음행동'이 아닌 할일)
       final inProgressItems = allItems.where((item) {
         final properties = item['properties'] as Map<String, dynamic>?;
         if (properties == null) return false;
-        
+
+        // 완료된 항목 제외
         final completed = properties['완료'] as Map<String, dynamic>?;
         final isCompleted = completed?['checkbox'] as bool? ?? false;
-        return !isCompleted;
+        if (isCompleted) return false;
+
+        // 명료화 = '다음행동' 상태 제외
+        final clarificationProperty = properties['명료화'] as Map<String, dynamic>?;
+        if (clarificationProperty != null) {
+          final clarificationSelect = clarificationProperty['select'] as Map<String, dynamic>?;
+          if (clarificationSelect != null) {
+            final clarificationName = clarificationSelect['name'] as String?;
+            if (clarificationName == '다음행동') {
+              return false;
+            }
+          }
+        }
+
+        return true;
       }).toList();
       
       print('진행 중인 할일: ${inProgressItems.length}개 필터링됨');

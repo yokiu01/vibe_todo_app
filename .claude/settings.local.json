@@ -24,7 +24,9 @@
       "Bash(dart:*)",
       "Bash(printf:*)",
       "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" install -r buildappoutputsflutter-apkapp-debug.apk)",
-      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" install -r \"build/app/outputs/flutter-apk/app-debug.apk\")"
+      "Bash(\"C:\\Users\\dlgus\\AppData\\Local\\Android\\sdk\\platform-tools\\adb.exe\" install -r \"build/app/outputs/flutter-apk/app-debug.apk\")",
+      "Bash(cat:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

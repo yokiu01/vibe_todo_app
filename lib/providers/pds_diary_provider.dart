@@ -410,6 +410,18 @@ class PDSDiaryProvider with ChangeNotifier {
       }
     });
   }
+
+  /// 잠금화면에서 Do 내용 업데이트
+  Future<void> updateDoContent(DateTime date, String timeKey, String doContent) async {
+    try {
+      print('PDSDiaryProvider: updateDoContent 호출 - $timeKey: $doContent');
+      await saveActualActivity(date, timeKey, doContent);
+      print('PDSDiaryProvider: Do 내용 저장 완료');
+    } catch (e) {
+      print('PDSDiaryProvider: updateDoContent 오류: $e');
+      rethrow;
+    }
+  }
 }
 
 

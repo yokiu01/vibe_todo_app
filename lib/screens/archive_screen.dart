@@ -23,6 +23,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
     const Tab(text: '목표 나침반', icon: Icon(Icons.explore, size: 18)),
     const Tab(text: '노트 관리함', icon: Icon(Icons.folder, size: 18)),
     const Tab(text: '아이스박스', icon: Icon(Icons.ac_unit, size: 18)),
+    const Tab(text: '회고 및 요약', icon: Icon(Icons.auto_stories, size: 18)),
   ];
 
   @override
@@ -39,7 +40,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
       setState(() {
         _selectedCategory = _tabs[_tabController.index].text!;
       });
-      
+
       // 탭에 따라 다른 데이터 로드
       switch (_selectedCategory) {
         case '목표 나침반':
@@ -50,6 +51,9 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
           break;
         case '아이스박스':
           _loadIceBoxData();
+          break;
+        case '회고 및 요약':
+          _loadReviewData();
           break;
         default:
           _loadArchivedItems();
@@ -333,11 +337,11 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
   Future<void> _loadIceBoxData() async {
     try {
       print('아이스박스: 데이터 로드 시작');
-      
+
       // 차가운 다음행동과 언젠가 항목들 로드
       final items = await _authService.apiService!.queryDatabase('1159f5e4a81180e591cbc596ae52f611', null); // TODO_DB_ID
       print('아이스박스: ${items.length}개 항목 로드됨');
-      
+
       final notionTasks = items.map((item) {
         try {
           return NotionTask.fromNotion(item);
@@ -357,6 +361,17 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
     } catch (e) {
       print('아이스박스 로드 오류: $e');
       _showErrorSnackBar('아이스박스 데이터 로드 실패: $e');
+    }
+  }
+
+  /// 회고 및 요약 데이터 로드
+  Future<void> _loadReviewData() async {
+    // 회고 탭은 자체적으로 데이터를 로드하므로 여기서는 빈 상태로 설정
+    if (mounted) {
+      setState(() {
+        _archivedItems = [];
+        _isLoading = false;
+      });
     }
   }
 
@@ -511,59 +526,168 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F1E8),
-      appBar: AppBar(
-        title: const Text(
-          '📦 아카이브',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF3C2A21),
-          ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            if (_isAuthenticated) _buildTabBar(),
+            Expanded(
+              child: _buildBody(),
+            ),
+          ],
         ),
-        backgroundColor: const Color(0xFFFDF6E3),
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings, color: Color(0xFF8B7355)),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
-                ),
-              );
-            },
-            tooltip: '설정',
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F1E8), // AppColors.cardBackground
+        border: Border(
+          bottom: BorderSide(color: const Color(0xFFE2E8F0)), // AppColors.borderColor
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
-        bottom: _isAuthenticated ? PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Container(
-            color: const Color(0xFFFDF6E3),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: const Color(0xFF8B7355),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              indicatorPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              labelColor: const Color(0xFFFDF6E3),
-              unselectedLabelColor: const Color(0xFF9C8B73),
-              labelStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-              ),
-              tabs: _tabs,
-            ),
-          ),
-        ) : null,
       ),
-      body: _buildBody(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF8B7355).withOpacity(0.1), // AppColors.primaryBrown
+                      const Color(0xFF9C8B73).withOpacity(0.1), // AppColors.primaryBrownLight
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.archive,
+                  color: const Color(0xFF8B7355), // AppColors.primaryBrown
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '아카이브',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF3C2A21), // AppColors.textPrimary
+                      ),
+                    ),
+                    Text(
+                      '목표와 노트 관리',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: const Color(0xFF6B7280), // AppColors.textSecondary
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 설정 버튼
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8B7355).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.settings,
+                    color: const Color(0xFF8B7355),
+                    size: 24,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      color: const Color(0xFFF5F1E8), // AppColors.cardBackground
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: TabBar(
+        controller: _tabController,
+        isScrollable: false,
+        indicator: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF8B7355), // AppColors.primaryBrown
+              const Color(0xFF9C8B73), // AppColors.primaryBrownLight
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF8B7355).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelColor: Colors.white,
+        unselectedLabelColor: const Color(0xFF8B7355), // AppColors.primaryBrown
+        labelStyle: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        labelPadding: EdgeInsets.zero,
+        tabs: [
+          for (int i = 0; i < _tabs.length; i++)
+            Tab(
+              child: SizedBox.expand(
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _tabs[i].icon ?? Container(),
+                      if (_tabs[i].icon != null) const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          _tabs[i].text ?? '',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -619,6 +743,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
           _buildGoalCompassTab(),
           _buildNoteManagerTab(),
           _buildIceBoxTab(),
+          _buildReviewTab(),
         ],
       ),
     );
@@ -1060,6 +1185,10 @@ class _ArchiveScreenState extends State<ArchiveScreen> with TickerProviderStateM
         ),
       ),
     );
+  }
+
+  Widget _buildReviewTab() {
+    return _ReviewAndSummaryTab(authService: _authService);
   }
 
   Widget _buildSectionCard({
@@ -2373,6 +2502,539 @@ class _GoalProjectRelatedPagesViewState extends State<_GoalProjectRelatedPagesVi
           color: const Color(0xFF8B7355),
         ),
         onTap: () => widget.onTaskTap(item),
+      ),
+    );
+  }
+}
+/// 회고 및 요약 탭 (Do와 See 데이터 표시)
+class _ReviewAndSummaryTab extends StatefulWidget {
+  final NotionAuthService authService;
+
+  const _ReviewAndSummaryTab({required this.authService});
+
+  @override
+  State<_ReviewAndSummaryTab> createState() => _ReviewAndSummaryTabState();
+}
+
+enum DateRangeFilter {
+  thisWeek,
+  lastWeek,
+  thisMonth,
+  lastMonth,
+  custom,
+}
+
+class _ReviewAndSummaryTabState extends State<_ReviewAndSummaryTab> {
+  DateRangeFilter _selectedFilter = DateRangeFilter.thisWeek;
+  DateTime _startDate = DateTime.now();
+  DateTime _endDate = DateTime.now();
+  bool _isLoading = false;
+  List<NotionTask> _completedTasks = [];
+  List<Map<String, dynamic>> _diaryEntries = []; // PDS Diary entries
+
+  @override
+  void initState() {
+    super.initState();
+    _updateDateRange();
+    _loadReviewData();
+  }
+
+  void _updateDateRange() {
+    final now = DateTime.now();
+    switch (_selectedFilter) {
+      case DateRangeFilter.thisWeek:
+        _startDate = now.subtract(Duration(days: now.weekday - 1));
+        _endDate = now;
+        break;
+      case DateRangeFilter.lastWeek:
+        final lastWeekStart = now.subtract(Duration(days: now.weekday + 6));
+        _startDate = lastWeekStart;
+        _endDate = lastWeekStart.add(const Duration(days: 6));
+        break;
+      case DateRangeFilter.thisMonth:
+        _startDate = DateTime(now.year, now.month, 1);
+        _endDate = now;
+        break;
+      case DateRangeFilter.lastMonth:
+        final lastMonth = DateTime(now.year, now.month - 1, 1);
+        _startDate = lastMonth;
+        _endDate = DateTime(now.year, now.month, 0);
+        break;
+      case DateRangeFilter.custom:
+        // Custom range set by date picker
+        break;
+    }
+  }
+
+  Future<void> _loadReviewData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Load completed tasks from TODO database
+      final allTasks = await widget.authService.apiService!.queryDatabase(
+        '1159f5e4a81180e591cbc596ae52f611', // TODO_DB_ID
+        null,
+      );
+
+      // Filter completed tasks within date range
+      final completedTasks = allTasks
+          .map((json) {
+            try {
+              return NotionTask.fromNotion(json);
+            } catch (e) {
+              print('회고 탭 NotionTask 변환 오류: $e');
+              return null;
+            }
+          })
+          .where((task) => task != null)
+          .cast<NotionTask>()
+          .where((task) {
+            if (!task.isCompleted) return false;
+
+            // Check if task was updated (completed) within date range
+            final completionDate = task.updatedAt;
+            return completionDate.isAfter(_startDate.subtract(const Duration(days: 1))) &&
+                   completionDate.isBefore(_endDate.add(const Duration(days: 1)));
+          })
+          .toList();
+
+      setState(() {
+        _completedTasks = completedTasks;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('회고 데이터 로드 오류: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _loadReviewData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Date filter chips
+            _buildDateFilterChips(),
+            const SizedBox(height: 24),
+
+            // Do Section (정량적 데이터)
+            _buildDoSection(),
+            const SizedBox(height: 24),
+
+            // See Section (정성적 데이터)
+            _buildSeeSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateFilterChips() {
+    return Card(
+      color: const Color(0xFFFDF6E3),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '기간 선택',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3C2A21),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('이번 주'),
+                  selected: _selectedFilter == DateRangeFilter.thisWeek,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedFilter = DateRangeFilter.thisWeek;
+                        _updateDateRange();
+                        _loadReviewData();
+                      });
+                    }
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('지난주'),
+                  selected: _selectedFilter == DateRangeFilter.lastWeek,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedFilter = DateRangeFilter.lastWeek;
+                        _updateDateRange();
+                        _loadReviewData();
+                      });
+                    }
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('이번 달'),
+                  selected: _selectedFilter == DateRangeFilter.thisMonth,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedFilter = DateRangeFilter.thisMonth;
+                        _updateDateRange();
+                        _loadReviewData();
+                      });
+                    }
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('지난달'),
+                  selected: _selectedFilter == DateRangeFilter.lastMonth,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedFilter = DateRangeFilter.lastMonth;
+                        _updateDateRange();
+                        _loadReviewData();
+                      });
+                    }
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('직접 선택'),
+                  selected: _selectedFilter == DateRangeFilter.custom,
+                  onSelected: (selected) async {
+                    if (selected) {
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (range != null) {
+                        setState(() {
+                          _selectedFilter = DateRangeFilter.custom;
+                          _startDate = range.start;
+                          _endDate = range.end;
+                          _loadReviewData();
+                        });
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')} ~ ${_endDate.year}-${_endDate.month.toString().padLeft(2, '0')}-${_endDate.day.toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF8B7355),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDoSection() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Calculate metrics
+    final totalCompleted = _completedTasks.length;
+    final projectCounts = <String, int>{};
+    for (var task in _completedTasks) {
+      final project = task.project ?? '미분류';
+      projectCounts[project] = (projectCounts[project] ?? 0) + 1;
+    }
+    final mostFocusedProject = projectCounts.isEmpty
+        ? '없음'
+        : projectCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+
+    return Card(
+      color: const Color(0xFFFDF6E3),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: Color(0xFF2563EB),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Do (실행)',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF3C2A21),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Metrics cards
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricCard(
+                    '완료한 작업',
+                    '$totalCompleted개',
+                    Icons.task_alt,
+                    const Color(0xFF10B981),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricCard(
+                    '가장 집중한 프로젝트',
+                    mostFocusedProject,
+                    Icons.work,
+                    const Color(0xFF8B5CF6),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Completed tasks list
+            const Text(
+              '완료한 작업 목록',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF3C2A21),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_completedTasks.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: Text(
+                    '완료한 작업이 없습니다',
+                    style: TextStyle(color: Color(0xFF8B7355)),
+                  ),
+                ),
+              )
+            else
+              ..._completedTasks.map((task) => _buildCompletedTaskCard(task)).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color.withOpacity(0.8),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompletedTaskCard(NotionTask task) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F1E8),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFDDD4C0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle,
+            color: Color(0xFF10B981),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                if (task.project != null)
+                  Text(
+                    task.project!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSeeSection() {
+    return Card(
+      color: const Color(0xFFFDF6E3),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.auto_stories,
+                    color: Color(0xFFF59E0B),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'See (회고)',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF3C2A21),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // PDS Diary entries (placeholder - no DB yet)
+            const Text(
+              'PDS 일기',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF3C2A21),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_diaryEntries.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F1E8),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFDDD4C0)),
+                ),
+                child: const Center(
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.book_outlined,
+                        size: 48,
+                        color: Color(0xFFDDD4C0),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'PDS 일기 데이터베이스가 아직 연동되지 않았습니다',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF8B7355),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ..._diaryEntries.map((entry) => _buildDiaryCard(entry)).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiaryCard(Map<String, dynamic> entry) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F1E8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDD4C0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            entry['date'] ?? '',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF8B7355),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            entry['content'] ?? '',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+        ],
       ),
     );
   }

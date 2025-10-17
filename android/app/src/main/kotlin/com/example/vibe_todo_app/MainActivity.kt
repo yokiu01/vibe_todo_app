@@ -9,6 +9,11 @@ import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
 import android.app.ActivityManager
+import android.os.PowerManager
+import android.provider.Settings
+import android.net.Uri
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.example.second_brain.WifiInfoPlugin
 
 class MainActivity : FlutterActivity() {
@@ -37,6 +42,9 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "startForegroundService" -> {
                     try {
+                        // 배터리 최적화 제외 요청
+                        requestBatteryOptimizationExemption()
+
                         LockScreenForegroundService.startService(this)
                         Log.d("MainActivity", "Foreground service started")
                         result.success(null)
@@ -53,6 +61,15 @@ class MainActivity : FlutterActivity() {
                     } catch (e: Exception) {
                         Log.e("MainActivity", "Error stopping foreground service: $e")
                         result.error("SERVICE_ERROR", "Failed to stop foreground service", e.toString())
+                    }
+                }
+                "requestBatteryOptimization" -> {
+                    try {
+                        requestBatteryOptimizationExemption()
+                        result.success(null)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error requesting battery optimization: $e")
+                        result.error("BATTERY_ERROR", "Failed to request battery optimization", e.toString())
                     }
                 }
                 else -> result.notImplemented()
@@ -214,6 +231,38 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.e("MainActivity", "Error registering ScreenOnReceiver: $e")
             e.printStackTrace()
+        }
+    }
+
+    /**
+     * 배터리 최적화 제외 요청
+     * 앱이 백그라운드에서도 계속 실행되도록 함
+     */
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val packageName = packageName
+
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                Log.d("MainActivity", "Requesting battery optimization exemption")
+                try {
+                    val intent = Intent()
+                    intent.action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                    intent.data = Uri.parse("package:$packageName")
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Error requesting battery optimization exemption: $e")
+                    // Fallback to general battery settings
+                    try {
+                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        startActivity(intent)
+                    } catch (e2: Exception) {
+                        Log.e("MainActivity", "Error opening battery settings: $e2")
+                    }
+                }
+            } else {
+                Log.d("MainActivity", "Already exempted from battery optimization")
+            }
         }
     }
 }

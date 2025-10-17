@@ -5,7 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -96,28 +99,15 @@ class LockScreenForegroundService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        Log.d("LockScreenForegroundService", "Task removed - Restarting service")
+        Log.d("LockScreenForegroundService", "Task removed - Scheduling service restart")
 
-        // 서비스 재시작
-        val restartServiceIntent = Intent(applicationContext, LockScreenForegroundService::class.java)
-        val pendingIntent = PendingIntent.getService(
-            applicationContext,
-            1,
-            restartServiceIntent,
-            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-        alarmManager.set(
-            android.app.AlarmManager.ELAPSED_REALTIME,
-            android.os.SystemClock.elapsedRealtime() + 1000,
-            pendingIntent
-        )
+        // 여러 방법으로 서비스 재시작 시도
+        scheduleServiceRestart()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("LockScreenForegroundService", "Service destroyed")
+        Log.d("LockScreenForegroundService", "Service destroyed - Scheduling restart")
 
         try {
             screenOnReceiver?.let {
@@ -128,17 +118,43 @@ class LockScreenForegroundService : Service() {
             Log.e("LockScreenForegroundService", "Error unregistering screen receiver: $e")
         }
 
-        // 서비스 재시작
+        // 서비스 재시작 스케줄
+        scheduleServiceRestart()
+    }
+
+    /**
+     * 서비스 재시작 스케줄링
+     * 여러 방법을 사용하여 신뢰성 향상
+     */
+    private fun scheduleServiceRestart() {
         try {
+            // 방법 1: AlarmManager 사용 (즉시 재시작)
             val restartServiceIntent = Intent(applicationContext, LockScreenForegroundService::class.java)
+            val pendingIntent = PendingIntent.getService(
+                applicationContext,
+                1,
+                restartServiceIntent,
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + 1000,
+                pendingIntent
+            )
+            Log.d("LockScreenForegroundService", "AlarmManager restart scheduled")
+
+            // 방법 2: 직접 재시작 시도
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 applicationContext.startForegroundService(restartServiceIntent)
             } else {
                 applicationContext.startService(restartServiceIntent)
             }
-            Log.d("LockScreenForegroundService", "Service restart scheduled")
+            Log.d("LockScreenForegroundService", "Direct restart attempted")
+
         } catch (e: Exception) {
-            Log.e("LockScreenForegroundService", "Error restarting service: $e")
+            Log.e("LockScreenForegroundService", "Error scheduling service restart: $e")
         }
     }
 
@@ -162,6 +178,8 @@ class LockScreenForegroundService : Service() {
         }
     }
 }
+
+
 
 
 

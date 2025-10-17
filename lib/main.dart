@@ -7,8 +7,11 @@ import 'providers/daily_plan_provider.dart';
 import 'providers/review_provider.dart';
 import 'providers/pds_diary_provider.dart';
 import 'providers/ai_provider.dart';
+import 'providers/onboarding_provider.dart';
+import 'providers/routine_provider.dart';
 import 'screens/main_navigation.dart';
 import 'screens/lock_screen_standalone.dart';
+import 'screens/onboarding/onboarding_flow.dart';
 import 'services/lock_screen_service.dart';
 import 'services/location_notification_service.dart';
 import 'services/time_notification_service.dart';
@@ -46,8 +49,31 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
       if (enabled) {
         await LockScreenService.startForegroundService();
       }
+
+      // 루틴 기반 작업 자동 생성 (비동기로 실행하여 앱 시작을 차단하지 않음)
+      _initRoutineGeneration();
     } catch (e) {
       print('Service initialization error: $e');
+    }
+  }
+
+  /// 루틴 기반 작업 자동 생성
+  Future<void> _initRoutineGeneration() async {
+    try {
+      // 컨텍스트가 준비될 때까지 대기
+      await Future.delayed(const Duration(seconds: 2));
+
+      if (!mounted) return;
+
+      // RoutineProvider에 접근하여 작업 생성
+      final routineProvider = Provider.of<RoutineProvider>(context, listen: false);
+      final generatedTaskIds = await routineProvider.checkAndGenerateRoutineTasks();
+
+      if (generatedTaskIds.isNotEmpty) {
+        print('Generated ${generatedTaskIds.length} tasks from routines');
+      }
+    } catch (e) {
+      print('Routine generation error: $e');
     }
   }
 
@@ -62,10 +88,12 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => OnboardingProvider()),
         ChangeNotifierProvider(create: (_) => ItemProvider()),
         ChangeNotifierProvider(create: (_) => DailyPlanProvider()),
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProvider(create: (_) => PDSDiaryProvider()),
+        ChangeNotifierProvider(create: (_) => RoutineProvider()),
         ChangeNotifierProvider(
           create: (_) => AIProvider()..initialize(),
         ),
@@ -214,7 +242,15 @@ class _ProductivityAppState extends State<ProductivityApp> with WidgetsBindingOb
             behavior: SnackBarBehavior.floating,
           ),
         ),
-        home: const MainNavigation(),
+        home: Consumer<OnboardingProvider>(
+          builder: (context, onboardingProvider, child) {
+            // Show onboarding if not completed, otherwise show main navigation
+            if (!onboardingProvider.isOnboardingCompleted) {
+              return const OnboardingFlow();
+            }
+            return const MainNavigation();
+          },
+        ),
         routes: {
           '/lockScreenStandalone': (context) => MultiProvider(
             providers: [

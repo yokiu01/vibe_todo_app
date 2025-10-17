@@ -393,60 +393,232 @@ class _LockScreenStandaloneState extends State<LockScreenStandalone>
     );
   }
 
-  // 간단한 일정 카드 - 완료 기능 없이 보기만
+  // 간단한 일정 카드 - Do 입력 가능
   Widget _buildSimpleEventCard(LockScreenPlanItem event) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: LockScreenColors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: LockScreenColors.cardBorder,
-          width: 1,
+    return GestureDetector(
+      onTap: () => _showDoInputDialog(event),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: LockScreenColors.cardBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: LockScreenColors.cardBorder,
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: LockScreenColors.cardShadow,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: LockScreenColors.cardShadow,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // 시간 표시
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: LockScreenColors.textSecondary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              KoreanLocalizer.formatTime(event.startTime),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: LockScreenColors.textSecondary,
+        child: Row(
+          children: [
+            // 시간 표시
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: LockScreenColors.textSecondary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                KoreanLocalizer.formatTime(event.startTime),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: LockScreenColors.textSecondary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
+            const SizedBox(width: 12),
 
-          // 할일 제목
-          Expanded(
-            child: Text(
-              event.title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: LockScreenColors.textPrimary,
+            // 할일 제목
+            Expanded(
+              child: Text(
+                event.title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: LockScreenColors.textPrimary,
+                ),
               ),
             ),
-          ),
-        ],
+
+            // 입력 아이콘
+            const Icon(
+              Icons.edit_outlined,
+              size: 18,
+              color: LockScreenColors.textSecondary,
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  // Do 입력 다이얼로그
+  void _showDoInputDialog(LockScreenPlanItem event) {
+    final TextEditingController doController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: LockScreenColors.cardBackground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: LockScreenColors.accentBackground,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.edit,
+                      size: 16,
+                      color: LockScreenColors.accentText,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Do 입력',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: LockScreenColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: LockScreenColors.textSecondary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  event.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: LockScreenColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: TextField(
+            controller: doController,
+            autofocus: true,
+            maxLines: 5,
+            decoration: InputDecoration(
+              hintText: '실제로 한 일을 입력하세요...',
+              hintStyle: TextStyle(
+                color: LockScreenColors.textSecondary.withOpacity(0.5),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: LockScreenColors.cardBorder,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: LockScreenColors.accentBackground,
+                  width: 2,
+                ),
+              ),
+              filled: true,
+              fillColor: LockScreenColors.cardBackground,
+              contentPadding: const EdgeInsets.all(16),
+            ),
+            style: const TextStyle(
+              fontSize: 15,
+              color: LockScreenColors.textPrimary,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                '취소',
+                style: TextStyle(
+                  color: LockScreenColors.textSecondary,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (doController.text.trim().isNotEmpty) {
+                  await _saveDoContent(event, doController.text.trim());
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Do 내용이 저장되었습니다'),
+                        backgroundColor: LockScreenColors.accentBackground,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: LockScreenColors.accentBackground,
+                foregroundColor: LockScreenColors.accentText,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text(
+                '저장',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Do 내용 저장
+  Future<void> _saveDoContent(LockScreenPlanItem event, String doContent) async {
+    try {
+      final pdsProvider = context.read<PDSDiaryProvider>();
+      await pdsProvider.updateDoContent(_selectedDate, event.id, doContent);
+      print('Do content saved for ${event.id}: $doContent');
+    } catch (e) {
+      print('Error saving Do content: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('저장 중 오류가 발생했습니다'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   // 빈 상태

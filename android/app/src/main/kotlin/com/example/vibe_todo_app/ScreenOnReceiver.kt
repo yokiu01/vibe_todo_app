@@ -68,7 +68,21 @@ class ScreenOnReceiver : BroadcastReceiver() {
 
                 if (isLockScreenEnabled) {
                     Log.d("ScreenOnReceiver", "Lock screen enabled - starting foreground service")
-                    LockScreenForegroundService.startService(context)
+                    try {
+                        LockScreenForegroundService.startService(context)
+                        Log.d("ScreenOnReceiver", "Foreground service started successfully after boot")
+                    } catch (e: Exception) {
+                        Log.e("ScreenOnReceiver", "Error starting service after boot: $e")
+                        // 재시도
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            try {
+                                LockScreenForegroundService.startService(context)
+                                Log.d("ScreenOnReceiver", "Retry: Foreground service started")
+                            } catch (e2: Exception) {
+                                Log.e("ScreenOnReceiver", "Retry failed: $e2")
+                            }
+                        }, 5000) // 5초 후 재시도
+                    }
                 } else {
                     Log.d("ScreenOnReceiver", "Lock screen disabled - not starting service")
                 }
